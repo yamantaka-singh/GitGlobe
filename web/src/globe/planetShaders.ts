@@ -142,11 +142,17 @@ ${NOISE}
     float domain = 0.0;
     for (int i = 0; i < ${MAX_CLUSTERS}; i++) {
       vec3 mu = uClusters[i].xyz;
-      // Padding entries are the zero vector; their dot product is 0 and their
-      // gaussian is negligible, so no branch is needed (branches on uniforms
-      // are the classic way to lose 20% on mobile).
-      float d = dot(dir, mu);
-      potential += exp(-11.0 * (1.0 - d)) * length(mu);
+      // Padding entries are the zero vector. Their gaussian is harmlessly zero,
+      // but their DOT PRODUCT is zero too — which beats any real cluster on the
+      // far side of the planet (negative dot) and would tint every remote
+      // region with domain 0. Push invalid slots to -3 so they can never win.
+      float valid = step(0.5, length(mu));
+      float d = dot(dir, mu) * valid + (valid - 1.0) * 3.0;
+      // k = 36 sets the continental radius. Calibrated, not guessed: at k = 11
+      // the 60 blobs overlapped into a single landmass covering 100% of the
+      // sphere. scripts/preview-planet.ts renders this exact formula on the CPU
+      // and fails the build if land drifts outside 18-55%.
+      potential += exp(-36.0 * (1.0 - d)) * valid;
       if (d > nearest) { nearest = d; domain = uClusters[i].w; }
     }
 
@@ -158,7 +164,7 @@ ${NOISE}
     float detail = fbm5(dir * 2.7 + warp + uSeed);
     float ridge = 1.0 - abs(fbm3(dir * 5.1 + uSeed * 0.7));
 
-    float h = potential * 0.52 + detail * 0.78 + ridge * 0.12 - 0.46;
+    float h = potential * 0.62 + detail * 0.78 + ridge * 0.12 - 0.68;
 
     // ---- ocean -------------------------------------------------------------
     float shelf = smoothstep(uSeaLevel - 0.30, uSeaLevel, h);
@@ -186,22 +192,31 @@ ${NOISE}
     // A thin lit band exactly at sea level. Coastlines are what the eye uses to
     // parse a sphere as a map, and one bright pixel of shoreline does more than
     // any amount of terrain detail.
-    float coastline = 1.0 - smoothstep(0.0, 0.016, abs(h - uSeaLevel));
-    albedo += tint * coastline * 0.30;
+    float coastline = 1.0 - smoothstep(0.0, 0.013, abs(h - uSeaLevel));
+    albedo += (tint * 0.5 + vec3(0.16, 0.30, 0.36)) * coastline * 0.75;
 
     // ---- ice ---------------------------------------------------------------
-    // Latitude-driven, roughened by the same noise so the margin is ragged.
+    // Polar caps only. The first pass started at |y| = 0.78, which is 51 deg of
+    // latitude — that put ice over a third of the planet and turned the whole
+    // temperate zone into grey mush. Real caps sit above roughly 65 deg.
     float lat = abs(dir.y);
-    float ice = smoothstep(0.78, 0.94, lat + detail * 0.10);
-    albedo = mix(albedo, uIce, ice * mix(0.65, 1.0, land));
+    float ice = smoothstep(0.90, 0.988, lat + detail * 0.05);
+    // Sea ice is thinner than land ice, so oceans keep some of their colour.
+    albedo = mix(albedo, uIce, ice * mix(0.55, 1.0, land));
 
     // ---- city lights -------------------------------------------------------
-    // Dense where cluster potential is high, broken up so they read as
-    // settlements rather than a wash. Never on ice, never at sea.
-    float urban = smoothstep(0.30, 1.25, potential) * land * (1.0 - ice);
-    float grain = fbm3(dir * 34.0 + uSeed);
-    float lights = urban * smoothstep(0.02, 0.55, grain);
-    lights += urban * smoothstep(0.55, 0.95, fbm3(dir * 12.0)) * 0.5;
+    // Three things stacked, because a single noise threshold produces orange
+    // lichen rather than a settlement network:
+    //   1. conurbation — only inside high-potential regions
+    //   2. coastal     — real cities sit on low ground near water
+    //   3. fine grain  — high frequency, thresholded near its peak, so only
+    //                    thin filaments light up instead of broad patches
+    float coastal = 1.0 - smoothstep(0.0, 0.17, h - uSeaLevel);
+    float conurbation = smoothstep(0.32, 1.15, potential);
+    float fine = fbm3(dir * 78.0 + uSeed);
+    float lights = conurbation * land * (1.0 - ice)
+                 * (0.30 + 0.70 * coastal)
+                 * smoothstep(0.06, 0.30, fine);
 
     gl_FragColor = vec4(albedo, clamp(lights, 0.0, 1.0));
   }

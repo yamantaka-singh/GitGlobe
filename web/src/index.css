@@ -1,12 +1,17 @@
 :root {
-  --bg: #000000;
-  --panel: rgba(3, 6, 12, 0.80);
-  --line: rgba(90, 160, 200, 0.16);
-  --line-strong: rgba(100, 210, 250, 0.42);
-  --text: #e8eef3;
-  --muted: #6a7e8d;
-  --cyan: #2de2ff;
-  --mint: #7cf5c0;
+  /* Sampled from the reference: black space, periwinkle atmosphere, violet
+     scatter, amber city lights. No cyan anywhere — that was the tell that the
+     old palette was a sci-fi default rather than a considered one. */
+  --bg: #020204;
+  --panel: rgba(4, 5, 12, 0.82);
+  --line: rgba(110, 139, 232, 0.16);
+  --line-strong: rgba(130, 160, 245, 0.42);
+  --text: #eceff6;
+  --muted: #737e97;
+  --cyan: #6e8be8;   /* periwinkle — the atmosphere rim */
+  --violet: #7a66c9;
+  --mint: #9ce0b8;
+  --amber: #ff9c47;  /* city lights */
   --fail: #ff6b6b;
 
   /* Editorial sans for names and headlines, mono strictly for telemetry. The
@@ -342,14 +347,14 @@ button:focus-visible {
   padding: 7px 9px;
   font-size: 11px;
   letter-spacing: 0.04em;
-  background: rgba(45, 226, 255, 0.05);
+  background: rgba(110, 139, 232, 0.06);
   border: 1px solid var(--line);
   transition: background 110ms, border-color 110ms, color 110ms;
 }
 
 .bench:hover:not(:disabled) {
   color: var(--cyan);
-  background: rgba(45, 226, 255, 0.12);
+  background: rgba(110, 139, 232, 0.14);
   border-color: var(--line-strong);
 }
 
@@ -426,25 +431,35 @@ button:focus-visible {
   height: 100%;
 }
 
-.reticle-brackets {
+.reticle-pin {
   position: absolute;
   width: 0;
   height: 0;
 }
 
-/* Four L-shaped corners forming an OPEN box — closed, it would hide the very
-   node it is pointing at. */
-.reticle-brackets i {
+/* A rotated square with a dark halo, exactly as in the reference. The halo is
+   what keeps it readable over both bright ice and dark ocean — a plain outline
+   disappears against one or the other. */
+.reticle-pin__diamond {
   position: absolute;
-  width: 7px;
-  height: 7px;
-  border: 1px solid currentColor;
+  left: -8px;
+  top: -8px;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid;
+  transform: rotate(45deg);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.6);
 }
 
-.reticle-brackets .tl { left: -13px; top: -13px; border-right: 0; border-bottom: 0; }
-.reticle-brackets .tr { left: 6px;   top: -13px; border-left: 0;  border-bottom: 0; }
-.reticle-brackets .bl { left: -13px; top: 6px;   border-right: 0; border-top: 0; }
-.reticle-brackets .br { left: 6px;   top: 6px;   border-left: 0;  border-top: 0; }
+.reticle-pin__core {
+  position: absolute;
+  left: -2.5px;
+  top: -2.5px;
+  width: 5px;
+  height: 5px;
+  background: #fff;
+  transform: rotate(45deg);
+}
 
 .reticle-card {
   position: absolute;
@@ -508,6 +523,20 @@ button:focus-visible {
   border-top: 1px solid var(--line);
 }
 
+/* ---------------------------------------------------------------- responsive */
+
+/* Tablet: the domain strip is the first thing to lose room, so let it scroll
+   and drop the wordmark rather than wrapping the bar onto two lines. */
+@media (max-width: 1024px) {
+  .topbar {
+    gap: 16px;
+  }
+  .tabs button {
+    padding: 5px 9px 7px;
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 860px) {
   .telemetry {
     display: none;
@@ -515,8 +544,59 @@ button:focus-visible {
   .reticle-card {
     display: none;
   }
+  .wordmark {
+    display: none;
+  }
   .intro {
-    background: rgba(0, 0, 0, 0.86);
+    background: linear-gradient(180deg, rgba(2, 2, 4, 0.94) 0%, rgba(2, 2, 4, 0.7) 62%, rgba(2, 2, 4, 0) 100%);
+    align-items: flex-start;
+    padding-top: 13vh;
+  }
+  .intro__meta {
+    gap: 26px;
+    margin-top: 30px;
+  }
+  .readout {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+/* Phone: touch targets get bigger, the reticle card is already gone, and the
+   headline has to stop competing with the globe for vertical space. */
+@media (max-width: 560px) {
+  .topbar {
+    padding: 12px 14px;
+  }
+  .tabs button {
+    padding: 8px 10px;
+  }
+  .intro__headline {
+    font-size: clamp(30px, 10vw, 44px);
+  }
+  .intro__body {
+    font-size: 14px;
+  }
+  .intro__start {
+    width: 100%;
+    padding: 15px 20px;
+  }
+}
+
+/* Short landscape (phones held sideways) — vertical space is the scarce axis. */
+@media (max-height: 520px) {
+  .intro {
+    padding-top: 6vh;
+  }
+  .intro__meta {
+    display: none;
+  }
+  .telemetry {
+    display: none;
   }
 }
 

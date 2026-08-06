@@ -123,25 +123,83 @@ interface Cluster {
   weight: number;
 }
 
+/**
+ * Domain poles — one anchor per domain, spread as evenly as possible.
+ *
+ * Farthest-point sampling rather than pure random: 12 random directions on a
+ * sphere clump badly, and clumped poles make neighbouring domains overlap into
+ * one indistinguishable region.
+ */
+function buildDomainPoles(rnd: () => number, count: number): Vec3[] {
+  const poles: Vec3[] = [uniformDirection(rnd)];
+  while (poles.length < count) {
+    let best: Vec3 = uniformDirection(rnd);
+    let bestScore = -2;
+    // Sample candidates, keep whichever is furthest from everything chosen.
+    for (let k = 0; k < 64; k++) {
+      const cand = uniformDirection(rnd);
+      let nearest = 2;
+      for (const p of poles) {
+        const d = 1 - (cand[0] * p[0] + cand[1] * p[1] + cand[2] * p[2]);
+        if (d < nearest) nearest = d;
+      }
+      if (nearest > bestScore) {
+        bestScore = nearest;
+        best = cand;
+      }
+    }
+    poles.push(best);
+  }
+  return poles;
+}
+
 function buildClusters(rnd: () => number, n: number): Cluster[] {
+  // Domains must be SPATIALLY coherent. Assigning `domain = i % 12` to randomly
+  // placed clusters scatters each domain across the whole globe, which breaks
+  // three things at once: "fly to domain" frames points on opposite
+  // hemispheres, the domain filter lights up the entire sphere, and no
+  // continent can represent a sector. Real UMAP output is spatially coherent by
+  // construction; the synthetic generator has to imitate that deliberately.
+  const poles = buildDomainPoles(rnd, DOMAINS.length);
+  const perDomain = new Int32Array(DOMAINS.length);
+
   const clusters: Cluster[] = [];
   for (let i = 0; i < n; i++) {
-    let mu = uniformDirection(rnd);
+    // Bias placement toward a domain pole so clusters gather into territories,
+    // then let the vMF spread of the nodes themselves blur the borders.
+    const targetDomain = i % DOMAINS.length;
+    const pole = poles[targetDomain];
+    const [pt1, pt2] = basisFrom(pole);
+
+    let mu = sampleVMF(pole, 9, pt1, pt2, rnd);
     for (let attempt = 0; attempt < 24; attempt++) {
-      const tooClose = clusters.some((c) => c.mu[0] * mu[0] + c.mu[1] * mu[1] + c.mu[2] * mu[2] > 0.86);
+      const tooClose = clusters.some((c) => c.mu[0] * mu[0] + c.mu[1] * mu[1] + c.mu[2] * mu[2] > 0.93);
       if (!tooClose) break;
-      mu = uniformDirection(rnd);
+      mu = sampleVMF(pole, 9, pt1, pt2, rnd);
     }
+
+    // Assign by nearest pole rather than by target, so the occasional cluster
+    // that lands over a border belongs to the region it is actually in.
+    let domain = targetDomain;
+    let nearest = -2;
+    for (let d = 0; d < poles.length; d++) {
+      const dot = poles[d][0] * mu[0] + poles[d][1] * mu[1] + poles[d][2] * mu[2];
+      if (dot > nearest) {
+        nearest = dot;
+        domain = d;
+      }
+    }
+
     const [t1, t2] = basisFrom(mu);
-    const domain = i % DOMAINS.length;
+    perDomain[domain]++;
     clusters.push({
       id: i,
-      label: `${DOMAINS[domain]} ${Math.floor(i / DOMAINS.length) + 1}`,
+      label: `${DOMAINS[domain]} ${perDomain[domain]}`,
       domain,
       mu,
       t1,
       t2,
-      kappa: 12 + Math.pow(rnd(), 2) * 900,
+      kappa: 30 + Math.pow(rnd(), 2) * 900,
       weight: 0.25 + Math.pow(rnd(), 1.6) * 2.5,
     });
   }

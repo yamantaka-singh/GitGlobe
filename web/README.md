@@ -131,6 +131,43 @@ src/
 
 ---
 
+## The planet surface
+
+The globe is a **map**, not Earth. Geography is derived from the semantic
+layout: continents form where repository clusters are dense, so the AI/ML
+landmass exists *because* AI/ML repositories are there. Sectors are territories.
+
+Generated once into a 2048×1024 equirectangular texture at load — terrain noise
+plus a loop over every cluster centre is far too expensive per-frame, but as a
+one-time bake it costs ~40ms and the sphere afterwards is a single texture
+fetch. RGB carries daylight albedo; alpha carries city-light intensity for the
+night side.
+
+```bash
+npm run preview:planet    # renders the same formula on the CPU
+```
+
+That writes `public/planet-preview.png` (the flat map) and
+`public/planet-globe.png` (an orthographic render lit by the same sun), and
+**fails if land drifts outside 18–55% or fewer than 10 domains have territory.**
+It exists because the first version of the shader produced a planet that was
+100% land, and nobody would have known until they opened a browser.
+
+Three things make the terrain read as geography rather than noise:
+
+- **Domain warping** before the sea-level threshold. A plain distance threshold
+  around each cluster gives circles, and circles read as CGI. Warping produces
+  peninsulas, inland seas, and archipelagos.
+- **Coastlines.** One bright pixel of shoreline does more work than any amount
+  of terrain detail — it is what lets the eye parse a sphere as a map.
+- **City lights on low coastal ground**, inside high-potential regions, gated by
+  a high-frequency threshold so they form filaments rather than patches. Real
+  settlement follows water and lowland.
+
+Territories are *tinted*, not painted. The planet stays muted so a hundred
+thousand data points on top of it remain the brightest things on screen. The
+moment the surface competes, the map stops being readable.
+
 ## Design decisions worth knowing before you edit
 
 **The quantised angles ride in `position`.** three.js derives the draw count from

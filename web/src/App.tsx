@@ -2,6 +2,8 @@ import { Suspense, useEffect, useRef, useState, type ComponentType } from 'react
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 
+import { SPACE } from './globe/palette';
+
 import { Scene } from './globe/Scene';
 import { Hud } from './ui/Hud';
 
@@ -57,10 +59,10 @@ export function App() {
         }}
         camera={{ fov: 40, near: 0.01, far: 100, position: [0, 0.7, 2.6] }}
         onCreated={({ gl }) => {
-          // Near-pure black. The background is the single most important colour
-          // on a 3D site, and additive glow only reads as glow against black —
-          // a navy background turns every point into a washed-out smudge.
-          gl.setClearColor(new THREE.Color('#000308'), 1);
+          // Not quite black. Pure #000 makes the atmosphere rim look like a
+          // sticker cut out and pasted on; a few points of blue give it
+          // somewhere to fall off to.
+          gl.setClearColor(new THREE.Color(...SPACE), 1);
         }}
       >
         <Suspense fallback={null}>

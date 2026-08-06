@@ -57,11 +57,11 @@ export function Reticle() {
         />
       </svg>
 
-      <div className="reticle-brackets" style={{ left: anchor.x, top: anchor.y, color: colour }}>
-        <i className="tl" />
-        <i className="tr" />
-        <i className="bl" />
-        <i className="br" />
+      {/* A rotated square, as in the reference. Reads as a surveyed position
+          rather than a UI cursor, and stays legible over bright terrain. */}
+      <div className="reticle-pin" style={{ left: anchor.x, top: anchor.y }}>
+        <span className="reticle-pin__diamond" style={{ borderColor: colour }} />
+        <span className="reticle-pin__core" />
       </div>
 
       <div className="reticle-card" style={{ left: cardX, top: cardY, borderColor: colour }}>

@@ -1,17 +1,18 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
 import { SUN_DIR } from './lighting';
+import { ATMOSPHERE, CITY_LIGHT, PLANET_SURFACE } from './palette';
 
 /**
- * Static subtree — nothing here changes after mount, so it can be built once
- * and forgotten (web3d-scene-architect's lifecycle rule).
+ * Static subtree — nothing here changes after mount (web3d-scene-architect's
+ * lifecycle rule), so it is built once and forgotten.
  *
- * The atmosphere is three separate layers, not one. A single Fresnel shell is
- * why the first version read as a soft blue lamp: it has no edge, so the eye
- * never finds the horizon. Splitting it into a hard rim, a wide scatter, and a
- * gridded core gives the silhouette a defined boundary and the surface a sense
- * of curvature — which is what makes it read as an instrument.
+ * The globe is a planet, not a wireframe ball: a baked terrain map with a
+ * day/night terminator, amber city lights on the dark side, and a three-layer
+ * periwinkle-to-violet atmosphere. Structure follows the reference — a
+ * naturalistic, muted body so that the data standing on it stays the brightest
+ * thing on screen.
  */
 
 // ---------------------------------------------------------------- starfield
@@ -21,7 +22,7 @@ const STAR_VERT = /* glsl */ `
   varying float vMag;
   void main() {
     vMag = aMag;
-    gl_PointSize = aMag * 2.2;
+    gl_PointSize = aMag * 2.1;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -33,11 +34,11 @@ const STAR_FRAG = /* glsl */ `
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
     float r = dot(uv, uv);
     if (r > 1.0) discard;
-    gl_FragColor = vec4(vec3(0.66, 0.76, 0.95), (1.0 - r) * vMag * 0.24);
+    gl_FragColor = vec4(vec3(0.70, 0.76, 0.92), (1.0 - r) * vMag * 0.20);
   }
 `;
 
-export function Starfield({ count = 2600, radius = 60 }: { count?: number; radius?: number }) {
+export function Starfield({ count = 2200, radius = 60 }: { count?: number; radius?: number }) {
   const { geometry, material } = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const mag = new Float32Array(count);
@@ -48,7 +49,7 @@ export function Starfield({ count = 2600, radius = 60 }: { count?: number; radiu
       pos[i * 3] = r * Math.cos(t) * radius;
       pos[i * 3 + 1] = z * radius;
       pos[i * 3 + 2] = r * Math.sin(t) * radius;
-      mag[i] = 0.3 + Math.pow(Math.random(), 3) * 1.3;
+      mag[i] = 0.28 + Math.pow(Math.random(), 3.2) * 1.25;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -68,14 +69,14 @@ export function Starfield({ count = 2600, radius = 60 }: { count?: number; radiu
   return <points geometry={geometry} material={material} frustumCulled={false} raycast={() => null} />;
 }
 
-// ---------------------------------------------------------------- core
+// ---------------------------------------------------------------- planet
 
-const CORE_VERT = /* glsl */ `
+const PLANET_VERT = /* glsl */ `
   varying vec3 vNormalW;
   varying vec3 vPosW;
-  varying vec3 vLocal;
+  varying vec2 vUv;
   void main() {
-    vLocal = normalize(position);
+    vUv = uv;
     vNormalW = normalize(mat3(modelMatrix) * normal);
     vec4 world = modelMatrix * vec4(position, 1.0);
     vPosW = world.xyz;
@@ -83,27 +84,26 @@ const CORE_VERT = /* glsl */ `
   }
 `;
 
-const CORE_FRAG = /* glsl */ `
+const PLANET_FRAG = /* glsl */ `
   precision highp float;
 
-  uniform vec3  uBase;
-  uniform vec3  uGrid;
-  uniform vec3  uSunDir;      // world-space, normalised
-  uniform vec3  uSunTint;
-  uniform float uParallels;
-  uniform float uMeridians;
-  uniform float uGridGain;
+  uniform sampler2D uSurface;
+  uniform float uHasSurface;
+  uniform vec3  uSunDir;
+  uniform vec3  uCityLight;
+  uniform vec3  uFallback;
+  uniform vec3  uGraticule;
+  uniform float uGraticuleGain;
+  uniform float uNightFloor;
   uniform float uTerminator;
 
   varying vec3 vNormalW;
   varying vec3 vPosW;
-  varying vec3 vLocal;
+  varying vec2 vUv;
 
   const float PI  = 3.141592653589793;
   const float TAU = 6.283185307179586;
 
-  // Derivative-aware line: constant screen width regardless of how badly the
-  // surface is foreshortened. A fixed-width smoothstep shears apart at the limb.
   float gridLine(float coord, float count, float weight) {
     float scaled = coord * count;
     float f = abs(fract(scaled) - 0.5);
@@ -115,68 +115,78 @@ const CORE_FRAG = /* glsl */ `
     vec3 toCam = normalize(cameraPosition - vPosW);
     float facing = max(dot(n, toCam), 0.0);
 
-    float theta = acos(clamp(vLocal.y, -1.0, 1.0)) / PI;
-    float phi = (atan(vLocal.z, vLocal.x) + PI) / TAU;
+    vec4 surf = texture2D(uSurface, vUv);
+    // Until the bake lands, fall back to flat ocean rather than black — a
+    // one-frame black sphere reads as a load failure.
+    vec3 albedo = mix(uFallback, surf.rgb, uHasSurface);
+    float cityLights = surf.a * uHasSurface;
 
-    // Two grid densities: a fine mesh plus a heavier line every fifth division.
-    // A single uniform grid reads as graph paper; a hierarchy reads as an
-    // instrument that someone graduated on purpose.
-    float fine = max(gridLine(theta, uParallels, 1.1), gridLine(phi, uMeridians, 1.1)) * 0.34;
-    float major = max(gridLine(theta, uParallels / 3.0, 1.5), gridLine(phi, uMeridians / 6.0, 1.5));
-    float lines = max(fine, major);
-
-    // Meridians converge at the poles into a solid blob — fade them out there.
-    lines *= smoothstep(0.0, 0.14, theta) * smoothstep(0.0, 0.14, 1.0 - theta);
-
-    // THE thing the previous version was missing. Without a light direction the
-    // sphere is uniformly dark and reads as a flat disc no matter how good the
-    // rim is. A terminator gives it volume: one limb catches light, the
-    // opposite side falls away, and the eye finally reads it as a solid body.
+    // ---- day / night -------------------------------------------------------
     float sun = dot(n, normalize(uSunDir));
     float day = smoothstep(-uTerminator, uTerminator, sun);
 
-    // Grazing angles only, so the grid describes curvature at the limb rather
-    // than tiling the whole surface like wallpaper.
-    float grazing = pow(1.0 - facing, 2.2);
+    vec3 rgb = albedo * (uNightFloor + (1.0 - uNightFloor) * day);
 
-    vec3 rgb = uBase * (0.55 + 0.45 * day);
-    rgb += uGrid * lines * grazing * uGridGain * (0.28 + 0.72 * day);
-    // A warm sliver exactly at the terminator — the strongest single cue that
-    // this is a lit body and not a coloured circle.
-    rgb += uSunTint * pow(1.0 - abs(sun), 22.0) * 0.55 * grazing;
+    // Cities burn only on the unlit side, brightest deep into the dark where
+    // nothing competes with them. This is the single strongest cue in the
+    // reference image that the planet is inhabited.
+    float night = 1.0 - day;
+    rgb += uCityLight * cityLights * night * night * 1.35;
+
+    // A warm sliver exactly at the terminator, plus a hint of scatter bleeding
+    // onto the dark side of the boundary.
+    rgb += uCityLight * pow(1.0 - abs(sun), 26.0) * 0.16;
+
+    // ---- graticule ---------------------------------------------------------
+    // Kept very faint now that there is terrain to read. It exists to say
+    // "this is an instrument", not to be looked at.
+    float theta = vUv.y;
+    float phi = vUv.x;
+    float lines = max(gridLine(theta, 9.0, 1.4), gridLine(phi, 18.0, 1.4));
+    lines *= smoothstep(0.0, 0.10, theta) * smoothstep(0.0, 0.10, 1.0 - theta);
+    float grazing = pow(1.0 - facing, 2.4);
+    rgb += uGraticule * lines * grazing * uGraticuleGain * (0.25 + 0.75 * day);
 
     gl_FragColor = vec4(rgb, 1.0);
   }
 `;
 
 /**
- * Opaque inner sphere. Load-bearing in two ways: it stops you seeing straight
- * through to the far hemisphere's points, and it writes depth, which is what
+ * The planet body. Opaque, and load-bearing twice over: it stops you seeing
+ * through to the far hemisphere's nodes, and it writes depth, which is what
  * correctly occludes arcs passing behind the globe.
  */
-export function Core({ radius }: { radius: number }) {
+export function Planet({ radius, surface }: { radius: number; surface: THREE.Texture | null }) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         uniforms: {
-          uBase: { value: new THREE.Color(0.010, 0.020, 0.038) },
-          uGrid: { value: new THREE.Color(0.13, 0.48, 0.62) },
+          uSurface: { value: null as THREE.Texture | null },
+          uHasSurface: { value: 0 },
           uSunDir: { value: SUN_DIR.clone() },
-          uSunTint: { value: new THREE.Color(0.42, 0.86, 1.0) },
-          uParallels: { value: 24 },
-          uMeridians: { value: 48 },
-          uGridGain: { value: 1.35 },
-          // How soft the day/night boundary is. Hard enough to read as a
-          // terminator, soft enough not to alias into a jagged line.
-          uTerminator: { value: 0.42 },
+          uCityLight: { value: new THREE.Color(...CITY_LIGHT) },
+          uFallback: { value: new THREE.Color(...PLANET_SURFACE.deepOcean) },
+          uGraticule: { value: new THREE.Color(0.24, 0.44, 0.62) },
+          uGraticuleGain: { value: 0.42 },
+          // Never fully black: an unlit hemisphere with zero albedo loses its
+          // silhouette against space and the globe looks bitten into.
+          uNightFloor: { value: 0.10 },
+          uTerminator: { value: 0.30 },
         },
-        vertexShader: CORE_VERT,
-        fragmentShader: CORE_FRAG,
+        vertexShader: PLANET_VERT,
+        fragmentShader: PLANET_FRAG,
         transparent: false,
         depthWrite: true,
       }),
     [],
   );
+
+  useEffect(() => {
+    material.uniforms.uSurface.value = surface;
+    material.uniforms.uHasSurface.value = surface ? 1 : 0;
+  }, [material, surface]);
+
+  useEffect(() => () => material.dispose(), [material]);
 
   return (
     <mesh material={material} raycast={() => null} renderOrder={0}>
@@ -213,8 +223,8 @@ const SHELL_FRAG = /* glsl */ `
     float fres = pow(1.0 - max(dot(n, toCam), 0.0), uPower);
 
     // Scatter concentrates on the lit limb. A uniform halo is the tell-tale of
-    // a fake atmosphere — real ones are brightest where the light grazes.
-    float sun = smoothstep(-0.5, 0.85, dot(n, normalize(uSunDir)));
+    // a fake atmosphere — real ones are brightest where light grazes.
+    float sun = smoothstep(-0.45, 0.9, dot(n, normalize(uSunDir)));
     float a = fres * uIntensity * mix(1.0, sun, uSunBias);
     if (a < 0.002) discard;
     gl_FragColor = vec4(uColor, a);
@@ -230,7 +240,7 @@ function Shell({
   renderOrder,
 }: {
   radius: number;
-  color: THREE.Color;
+  color: RGBTuple;
   intensity: number;
   power: number;
   sunBias: number;
@@ -240,7 +250,7 @@ function Shell({
     () =>
       new THREE.ShaderMaterial({
         uniforms: {
-          uColor: { value: color },
+          uColor: { value: new THREE.Color(...color) },
           uSunDir: { value: SUN_DIR.clone() },
           uIntensity: { value: intensity },
           uPower: { value: power },
@@ -256,6 +266,8 @@ function Shell({
     [color, intensity, power, sunBias],
   );
 
+  useEffect(() => () => material.dispose(), [material]);
+
   return (
     <mesh material={material} raycast={() => null} frustumCulled={false} renderOrder={renderOrder}>
       <sphereGeometry args={[radius, 64, 48]} />
@@ -263,85 +275,25 @@ function Shell({
   );
 }
 
+type RGBTuple = readonly [number, number, number];
+
 /**
  * Three shells, each doing one job:
  *
- * - **edge** — very high exponent, almost on the surface. A hairline. This is
- *   what makes the silhouette look cut rather than airbrushed.
- * - **rim** — high exponent, sun-biased. The lit crescent.
- * - **scatter** — low exponent, wide, faint, strongly sun-biased. Volume.
+ * - **edge** — very high exponent, almost on the surface. A hairline that makes
+ *   the silhouette look cut rather than airbrushed.
+ * - **rim** — periwinkle, sun-biased. The lit crescent.
+ * - **scatter** — violet, wide, faint. The halo that bleeds into space.
  *
- * One shell forces one exponent, and a single exponent can only ever produce a
- * gradient — which is why the first version read as a blue smudge.
+ * The periwinkle-to-violet shift across the layers is the detail that makes the
+ * reference read as photographic. A single-hue glow always looks synthetic.
  */
 export function Atmosphere({ radius }: { radius: number }) {
-  const edge = useMemo(() => new THREE.Color(0.72, 0.96, 1.0), []);
-  const rim = useMemo(() => new THREE.Color(0.24, 0.78, 1.0), []);
-  const scatter = useMemo(() => new THREE.Color(0.08, 0.30, 0.68), []);
   return (
     <>
-      <Shell radius={radius * 1.004} color={edge} intensity={0.55} power={20} sunBias={0.35} renderOrder={3} />
-      <Shell radius={radius * 1.03} color={rim} intensity={0.70} power={7.5} sunBias={0.6} renderOrder={4} />
-      <Shell radius={radius * 1.19} color={scatter} intensity={0.34} power={2.4} sunBias={0.8} renderOrder={5} />
+      <Shell radius={radius * 1.004} color={ATMOSPHERE.edge} intensity={0.42} power={22} sunBias={0.45} renderOrder={3} />
+      <Shell radius={radius * 1.035} color={ATMOSPHERE.rim} intensity={0.78} power={6.5} sunBias={0.62} renderOrder={4} />
+      <Shell radius={radius * 1.20} color={ATMOSPHERE.scatter} intensity={0.40} power={2.2} sunBias={0.78} renderOrder={5} />
     </>
-  );
-}
-
-// ---------------------------------------------------------------- equator
-
-const RING_FRAG = /* glsl */ `
-  precision mediump float;
-  uniform vec3 uColor;
-  uniform float uIntensity;
-  varying vec2 vUv;
-  void main() {
-    float edge = abs(vUv.y - 0.5) * 2.0;
-    float a = (1.0 - smoothstep(0.0, 1.0, edge)) * uIntensity;
-    if (a < 0.002) discard;
-    gl_FragColor = vec4(uColor, a);
-  }
-`;
-
-const RING_VERT = /* glsl */ `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-/**
- * A thin ring at the equator. Small detail, disproportionate effect: it gives
- * the globe an axis and a sense of scale, which is the difference between a
- * ball of dots and an instrument someone calibrated.
- */
-export function EquatorRing({ radius }: { radius: number }) {
-  const material = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        uniforms: {
-          uColor: { value: new THREE.Color(0.24, 0.72, 0.88) },
-          uIntensity: { value: 0.30 },
-        },
-        vertexShader: RING_VERT,
-        fragmentShader: RING_FRAG,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-      }),
-    [],
-  );
-
-  return (
-    <mesh
-      material={material}
-      rotation={[-Math.PI / 2, 0, 0]}
-      raycast={() => null}
-      frustumCulled={false}
-      renderOrder={1}
-    >
-      <ringGeometry args={[radius * 1.22, radius * 1.245, 160]} />
-    </mesh>
   );
 }

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 
-import { Atmosphere, Core, EquatorRing, Starfield } from './Backdrop';
+import { Atmosphere, Planet, Starfield } from './Backdrop';
+import { usePlanetTexture } from './usePlanetTexture';
 import { PointCloud, type PointCloudHandle } from './PointCloud';
 import { ArcLayer, ArcPool, AMBIENT_STYLE, FOCUS_STYLE, type ArcEndpoints } from './ArcLayer';
 import { usePicking } from './usePicking';
@@ -87,6 +88,11 @@ export function Scene() {
   useDeviceTier();
   useAnchor(GLOBE_RADIUS);
 
+  // Terrain is baked from the cluster centres, so it can only be built once the
+  // manifest has arrived. Continents grow where the repositories actually are.
+  const [manifestState, setManifestState] = useState<TileManifest | null>(null);
+  const surface = usePlanetTexture(manifestState, tier);
+
   const ambientPool = useMemo(
     () => new ArcPool(TIER_BUDGET(tier).ambientArcs, GLOBE_RADIUS, AMBIENT_STYLE),
     [tier],
@@ -106,6 +112,7 @@ export function Scene() {
         const manifest = sceneIndex.manifest ?? (await fetchManifest(ac.signal));
         if (cancelled) return;
         sceneIndex.manifest = manifest;
+        setManifestState(manifest);
 
         const maxBand = TIER_BUDGET(tier).maxBand;
         const loaded: LoadedBand[] = [];
@@ -236,7 +243,7 @@ export function Scene() {
   useEffect(() => {
     if (clouds.length === 0) return;
     gl.compile(scene, camera);
-  }, [clouds, graphVersion, gl, scene, camera]);
+  }, [clouds, graphVersion, surface, gl, scene, camera]);
 
   // ---- click to select ------------------------------------------------------
   useEffect(() => {
@@ -283,9 +290,8 @@ export function Scene() {
     <>
       {/* STATIC — never changes */}
       <Starfield />
-      <Core radius={GLOBE_RADIUS} />
+      <Planet radius={GLOBE_RADIUS} surface={surface} />
       <Atmosphere radius={GLOBE_RADIUS} />
-      <EquatorRing radius={GLOBE_RADIUS} />
 
       {/* DRIVEN — the single owner of the camera */}
       <Rig radius={GLOBE_RADIUS} />

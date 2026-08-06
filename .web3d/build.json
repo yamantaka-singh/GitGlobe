@@ -32,22 +32,28 @@
       "ambientArcs": 2000,
       "focusArcCapacity": 256,
       "arcTriangles": 80000,
-      "graphBytesAt100k": 4400000
+      "graphBytesAt100k": 4400000,
+      "planetTexturePx": 2048,
+      "planetBakeMs": 50,
+      "landFraction": [
+        0.18,
+        0.55
+      ]
     }
   },
   "artDirection": {
-    "mood": "hard sci-fi instrument — precise, dense, cold",
-    "background": "#000308",
-    "accent": "#2DE2FF",
-    "secondary": "#7CF5C0",
-    "warning": "#FFB84D",
+    "mood": "photographic planet on black — naturalistic surface, bright data",
+    "background": "#020204",
+    "accent": "#6E8BE8",
+    "secondary": "#7A66C9",
+    "warning": "#FF9C47",
     "motion": [
       "deliberate",
       "weightless",
       "measured"
     ],
-    "reference": "populous.com/explore — pure black, editorial restraint, every point opens a card",
-    "notes": "Nine cool hues, three warm accents. A full rainbow reads as a data-viz default; a cold field with a few warm signals reads as an instrument. Additive blending on near-black is what makes the glow read at all.",
+    "reference": "populous.com/explore — Earth on pure black, periwinkle-to-violet rim, amber night-side city lights, white diamond markers",
+    "notes": "No cyan. The reference has no neon at all: a muted photographic body, a violet halo, and markers that are the only pure-white things on screen. That hierarchy is what keeps 100k data points readable over terrain.",
     "explicitlyNotDoing": [
       "bloom post-processing",
       "scanlines",
@@ -133,6 +139,21 @@
       "id": "phase06-chrome",
       "decision": "Top bar with domain tabs; all diagnostics behind a toggle",
       "why": "Two dense always-on panels is what made it read as a debug tool. Populous keeps almost nothing on screen."
+    },
+    {
+      "id": "phase07-planet-bake",
+      "decision": "Terrain baked once into a 2048x1024 equirectangular RGBA texture; RGB albedo, A city lights",
+      "why": "Per-fragment fBm plus a 64-cluster loop is unaffordable per frame and trivial as a one-time pass. One texture fetch afterwards."
+    },
+    {
+      "id": "phase07-geography-from-layout",
+      "decision": "Continents grow from cluster potential, so territories ARE sectors",
+      "why": "Makes the semantic map literal. Also forced a real fix: domains were assigned by cluster index, scattering each domain across the globe and breaking fly-to-domain."
+    },
+    {
+      "id": "phase07-cpu-preview",
+      "decision": "scripts/preview-planet.ts renders the same formula in Node and fails on bad land fraction",
+      "why": "The first shader produced 100% land. Without a headless render nobody finds that until they open a browser."
     }
   ]
 }
