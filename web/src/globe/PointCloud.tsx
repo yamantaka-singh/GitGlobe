@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { LoadedBand } from '../tile/loader';
 import { DOMAIN_PALETTE, PICK_FRAG, PICK_VERT, POINTS_FRAG, POINTS_VERT } from './shaders';
 import { PICK_LAYER } from './layers';
+import { SUN_DIR } from './lighting';
 import { useGlobeStore } from '../store/useGlobeStore';
 
 export interface PointCloudHandle {
@@ -76,7 +77,12 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
         ...shared,
         uPalette: { value: palette },
         uHoverIndex: { value: -1 },
-        uDimLowSignal: { value: 0.35 },
+        uDimLowSignal: { value: 0.32 },
+        // Nodes above this normalised size get a containment ring.
+        uHubThreshold: { value: 0.62 },
+        uDomainFilter: { value: -1 },
+        uSunDir: { value: SUN_DIR.clone() },
+        uNightDim: { value: 0.42 },
       },
       vertexShader: POINTS_VERT,
       fragmentShader: POINTS_FRAG,
@@ -96,8 +102,15 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
         uSizeScale: { value: 32 },
         uPixelRatio: { value: Math.min(gl.getPixelRatio(), 2) },
         uCullBias: { value: -0.06 },
-        uPickPadding: { value: 5 },
+        // 2.5px, down from 5. Every extra pixel of hit padding is another pixel
+        // of "I pointed there and it selected something else" — which is
+        // exactly what made the first version feel like the dots and the repos
+        // were in different places.
+        uPickPadding: { value: 2.5 },
         uIdOffset: { value: idOffset },
+        // Depth bias in NDC units. Small enough that it only resolves genuine
+        // overlaps, large enough to always beat the sphere's own curvature.
+        uSizeBias: { value: 0.004 },
       },
       vertexShader: PICK_VERT,
       fragmentShader: PICK_FRAG,
@@ -141,7 +154,7 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
   }, [band, displayMaterial, pickMaterial, onReady, onDispose]);
 
   useFrame(() => {
-    const { hoveredId, sizeScale } = useGlobeStore.getState();
+    const { hoveredId, sizeScale, activeDomain } = useGlobeStore.getState();
     const local = hoveredId >= 0 ? hoveredId - band.idOffset : -1;
     const inThisBand = local >= 0 && local < band.tile.count;
     displayMaterial.uniforms.uHoverIndex.value = inThisBand ? local : -1;
@@ -149,6 +162,7 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
     // The pick pass must use the same size, or the hit area drifts away from
     // what the user can see and hovering starts missing.
     pickMaterial.uniforms.uSizeScale.value = sizeScale;
+    displayMaterial.uniforms.uDomainFilter.value = activeDomain;
   });
 
   return <points ref={pointsRef} geometry={geometry} material={displayMaterial} />;

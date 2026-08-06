@@ -41,6 +41,8 @@ const VERTEX_COMMON = /* glsl */ `
     vec4  clip;
     float pointSize;
     float facing;
+    float size;
+    vec3  dir;      // unit direction on the sphere, for sun-side shading
   };
 
   Placed placePoint() {
@@ -57,6 +59,8 @@ const VERTEX_COMMON = /* glsl */ `
 
     Placed p;
     p.facing = dot(worldNrm, toCamera);
+    p.size = position.z / 65535.0;
+    p.dir = worldNrm;
 
     // Cull the far hemisphere here rather than on the CPU: no index rebuild,
     // no per-frame JS, and it removes ~half the fragment work for free.
@@ -67,10 +71,9 @@ const VERTEX_COMMON = /* glsl */ `
     }
 
     vec4 mv = viewMatrix * vec4(worldPos, 1.0);
-    float size = position.z / 65535.0;
 
     // Perspective-correct: -mv.z is view-space depth.
-    p.pointSize = clamp(size * uSizeScale * uPixelRatio / max(-mv.z, 0.001), 1.0, 28.0);
+    p.pointSize = clamp(p.size * uSizeScale * uPixelRatio / max(-mv.z, 0.001), 1.0, 28.0);
     p.clip = projectionMatrix * mv;
     return p;
   }
@@ -82,15 +85,20 @@ ${VERTEX_COMMON}
   uniform vec3  uPalette[12];
   uniform float uHoverIndex;
   uniform float uDimLowSignal;
+  uniform float uDomainFilter;   // -1 = show everything
+  uniform vec3  uSunDir;
+  uniform float uNightDim;
 
   varying vec3  vColor;
   varying float vAlpha;
   varying float vHover;
+  varying float vSize;
 
   void main() {
     Placed p = placePoint();
     gl_Position  = p.clip;
     gl_PointSize = p.pointSize;
+    vSize = p.size;
 
     if (p.pointSize == 0.0) {
       vColor = vec3(0.0);
@@ -111,6 +119,16 @@ ${VERTEX_COMMON}
     float archived  = mod(floor(aFlags / 2.0), 2.0); // bit 1
     float dim = mix(1.0, uDimLowSignal, lowSignal) * mix(1.0, 0.55, archived);
 
+    // Domain filter. Dim rather than hide, so filtering reads as "the rest is
+    // still there, just quiet" — which preserves the sense of a whole map.
+    float matches = step(uDomainFilter, -0.5) + step(abs(aDomain - uDomainFilter), 0.5);
+    dim *= mix(0.045, 1.0, min(matches, 1.0));
+
+    // Nodes on the unlit side dim slightly. Enough to reinforce that this is a
+    // lit body, not so much that data on the night side becomes unreadable.
+    float night = smoothstep(-0.4, 0.5, dot(p.dir, normalize(uSunDir)));
+    dim *= mix(uNightDim, 1.0, night);
+
     vAlpha = limb * dim;
     vHover = step(abs(aIndex - uHoverIndex), 0.5);
 
@@ -125,9 +143,12 @@ ${VERTEX_COMMON}
 export const POINTS_FRAG = /* glsl */ `
   precision mediump float;
 
+  uniform float uHubThreshold;
+
   varying vec3  vColor;
   varying float vAlpha;
   varying float vHover;
+  varying float vSize;
 
   void main() {
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
@@ -135,21 +156,35 @@ export const POINTS_FRAG = /* glsl */ `
     if (r2 > 1.0) discard;
 
     float r = sqrt(r2);
-    // Tight core, soft halo — reads as a star rather than a flat disc.
-    float core = pow(1.0 - r, 2.4);
-    float halo = pow(1.0 - r, 0.7) * 0.28;
+    float falloff = 1.0 - r;
+    // Hard core, tight falloff, minimal bloom. Using pow() is expensive,
+    // so we approximate pow(falloff, 3.6) with falloff^4 and pow(falloff, 1.4)
+    // with falloff * sqrt(falloff) to save ALUs.
+    float core = falloff * falloff;
+    core = core * core;
+    float halo = falloff * sqrt(falloff) * 0.16;
     float a = (core + halo) * vAlpha;
-    if (a < 0.004) discard;
 
-    vec3 rgb = mix(vColor, vec3(1.0), core * 0.55);
+    vec3 rgb = mix(vColor, vec3(1.0), core * 0.62);
 
-    // Hover gets a crisp ring so it stays legible inside a dense cluster.
+    // High-rank nodes get a containment ring. It is the cheapest possible
+    // signal that a point is a significant thing rather than a speck, and it
+    // only appears where there are enough pixels to draw it.
+    if (vSize > uHubThreshold) {
+      float strength = smoothstep(uHubThreshold, 1.0, vSize);
+      float ring = smoothstep(0.60, 0.70, r) * (1.0 - smoothstep(0.80, 0.92, r));
+      a += ring * 0.55 * strength * vAlpha;
+      rgb = mix(rgb, vec3(0.62, 0.94, 1.0), ring * strength);
+    }
+
+    // Hover: a crisp bracket ring that stays legible inside a dense cluster.
     if (vHover > 0.5) {
-      float ring = smoothstep(0.62, 0.72, r) * (1.0 - smoothstep(0.86, 0.96, r));
-      rgb += ring * 1.6;
+      float ring = smoothstep(0.58, 0.68, r) * (1.0 - smoothstep(0.84, 0.96, r));
+      rgb += ring * 1.8;
       a = max(a, ring);
     }
 
+    if (a < 0.004) discard;
     gl_FragColor = vec4(rgb, a);
   }
 `;
@@ -159,14 +194,23 @@ ${VERTEX_COMMON}
 
   uniform float uPickPadding;
   uniform float uIdOffset;
+  uniform float uSizeBias;
 
   varying vec3 vPickColor;
 
   void main() {
     Placed p = placePoint();
     gl_Position = p.clip;
+
+    // Bias depth toward the camera in proportion to node size, so when two
+    // points overlap the more significant one wins. Without this, picking in a
+    // dense cluster resolves to whichever speck happens to be nearer by a
+    // fraction of a millimetre, and hovering feels arbitrary.
+    gl_Position.z -= p.size * uSizeBias * gl_Position.w;
+
     // Inflate slightly so small points stay hittable without demanding
-    // sub-pixel mouse accuracy.
+    // sub-pixel mouse accuracy. Keep this tight: every extra pixel is another
+    // pixel of "I clicked there and it selected something else".
     gl_PointSize = p.pointSize > 0.0 ? max(p.pointSize, uPickPadding) : 0.0;
 
     // Global id + 1, so a cleared black buffer decodes to "nothing".
@@ -192,23 +236,28 @@ export const PICK_FRAG = /* glsl */ `
 `;
 
 /**
- * Twelve domain colours. Bright and saturated because they composite additively
- * onto near-black; pastel palettes wash out to grey here. Hues are spaced to
- * stay distinguishable under deuteranopia — the pairs that confuse (red/green)
- * are separated by large lightness differences. Verify with a simulator before
- * Phase 3 ships, per web3d-interaction-ux.
+ * Twelve domain colours — the "hard sci-fi instrument" direction.
+ *
+ * Deliberately cold-dominant: nine cool hues, three warm accents. A full
+ * rainbow reads as a data-viz default; a cold field with a few warm signals
+ * reads as an instrument, and the warm nodes become the ones your eye finds.
+ *
+ * All are bright and saturated because they composite additively onto black —
+ * pastels wash out to grey here. Confusable pairs (the red/green axis) are
+ * separated by large lightness differences for deuteranopia. Verify with a
+ * simulator before Phase 3 ships, per web3d-interaction-ux.
  */
 export const DOMAIN_PALETTE: readonly (readonly [number, number, number])[] = [
-  [0.42, 0.72, 1.0], // AI / ML — blue
-  [1.0, 0.55, 0.28], // Web frameworks — orange
-  [0.55, 0.9, 0.62], // Databases — green
-  [0.98, 0.83, 0.35], // DevOps — yellow
-  [0.76, 0.6, 1.0], // Languages — violet
-  [0.4, 0.92, 0.9], // Systems — cyan
-  [1.0, 0.62, 0.78], // Data engineering — pink
-  [0.62, 0.78, 0.55], // Security — olive
-  [1.0, 0.45, 0.45], // Graphics — coral
-  [0.55, 0.65, 0.95], // Mobile — periwinkle
-  [0.85, 0.95, 0.55], // Scraping — lime
-  [0.72, 0.74, 0.8], // Scientific — cool grey
+  [0.26, 0.78, 1.00], // AI / ML — signal cyan
+  [1.00, 0.62, 0.24], // Web frameworks — amber (warm accent)
+  [0.36, 0.95, 0.72], // Databases — mint
+  [0.94, 0.82, 0.42], // DevOps — pale gold (warm accent)
+  [0.62, 0.58, 1.00], // Languages — periwinkle
+  [0.58, 0.92, 1.00], // Systems — ice
+  [0.20, 0.72, 0.80], // Data engineering — deep teal
+  [1.00, 0.42, 0.42], // Security — alert red (warm accent)
+  [0.82, 0.48, 1.00], // Graphics — orchid
+  [0.42, 0.60, 0.92], // Mobile — steel blue
+  [0.70, 0.94, 0.46], // Scraping — chartreuse
+  [0.64, 0.72, 0.84], // Scientific — cool grey
 ];

@@ -1,5 +1,15 @@
 import { decodeTile, type Tile } from './format';
 
+export interface GraphManifest {
+  file: string;
+  bytes: number;
+  directedEdges: number;
+  csrEntries: number;
+  ambientArcs: number;
+  pagerank: { damping: number; iterations: number; converged: boolean; delta: number };
+  degree: { mean: number; max: number; p50: number; p99: number };
+}
+
 export interface TileManifest {
   layoutVersion: number;
   generatedAt: string;
@@ -8,6 +18,8 @@ export interface TileManifest {
   synthetic: boolean;
   bands: Array<{ band: number; count: number; bytes: number; file: string }>;
   domains: string[];
+  /** Absent on pre-v2 worlds generated before the graph existed. */
+  graph?: GraphManifest;
   clusters: Array<{ id: number; label: string; domain: number; theta: number; phi: number; kappa: number }>;
 }
 

@@ -91,6 +91,17 @@ class GlobeCamera {
     }
   }
 
+  /**
+   * The pre-entry framing: far out, slightly above, so `reset()` has somewhere
+   * to travel from when the user presses Start. Instant — this is where the
+   * globe already is, not a move the user should see.
+   */
+  async establish() {
+    if (!this.controls) return;
+    const d = this.radius * 5.4;
+    await this.controls.setLookAt(d * 0.34, d * 0.30, d, 0, 0, 0, false);
+  }
+
   /** Used by the benchmark to drive a deterministic orbit. */
   setOrbitAngle(azimuth: number, polar: number, distance: number) {
     this.controls?.rotateTo(azimuth, polar, false);
@@ -127,7 +138,9 @@ export function Rig({ radius }: { radius: number }) {
     c.mouseButtons.middle = CameraControlsImpl.ACTION.DOLLY;
     c.touches.two = CameraControlsImpl.ACTION.TOUCH_DOLLY;
 
-    void globeCamera.reset(true);
+    // Start at the establishing framing, not the working one — the Intro
+    // overlay is up, and Start needs somewhere to fly from.
+    void globeCamera.establish();
     invalidate();
     return () => {
       globeCamera.controls = null;

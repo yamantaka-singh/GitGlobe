@@ -5,6 +5,9 @@ import { useGlobeStore } from '../store/useGlobeStore';
 import { globeCamera } from '../camera/Rig';
 import { sceneIndex } from '../globe/Scene';
 import { DOMAIN_PALETTE } from '../globe/shaders';
+import { repoIdentity } from '../repo/names';
+import { Reticle } from './Reticle';
+import { Intro } from './Intro';
 
 function rgb(i: number) {
   const c = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length];
@@ -33,141 +36,220 @@ function useFps() {
   return fps;
 }
 
+/**
+ * Chrome is deliberately thin.
+ *
+ * The previous HUD put two dense panels over the scene, which is why it read as
+ * a debug tool. Populous keeps almost nothing on screen: a wordmark, a row of
+ * category tabs, and the work itself. Everything diagnostic now lives behind a
+ * toggle, because it is for us, not for whoever we show this to.
+ */
 export function Hud() {
-  const fps = useFps();
-  const {
-    totalPoints,
-    loadedBands,
-    loadError,
-    hoveredId,
-    selectedId,
-    tier,
-    sizeScale,
-    autoRotate,
-    benchRunning,
-    benchResults,
-  } = useGlobeStore();
+  const entered = useGlobeStore((s) => s.entered);
+  const activeDomain = useGlobeStore((s) => s.activeDomain);
+  const showTelemetry = useGlobeStore((s) => s.showTelemetry);
+  const selectedId = useGlobeStore((s) => s.selectedId);
+  const hoveredId = useGlobeStore((s) => s.hoveredId);
+  const focusArcCount = useGlobeStore((s) => s.focusArcCount);
 
-  const hovered = sceneIndex.resolve(hoveredId);
-  const selected = sceneIndex.resolve(selectedId);
   const domains = sceneIndex.manifest?.domains ?? [];
+  const selected = sceneIndex.resolve(selectedId);
 
-  const flyRandomCluster = () => {
-    const clusters = sceneIndex.manifest?.clusters ?? [];
+  const flyToDomain = (index: number) => {
+    const store = useGlobeStore.getState();
+    if (index === store.activeDomain) {
+      store.setActiveDomain(-1);
+      void globeCamera.reset();
+      return;
+    }
+    store.setActiveDomain(index);
+    const clusters = (sceneIndex.manifest?.clusters ?? []).filter((c) => c.domain === index);
     if (clusters.length === 0) return;
-    const c = clusters[Math.floor(Math.random() * clusters.length)];
-    void globeCamera.flyToSpherical(c.theta, c.phi);
-  };
-
-  const flyToDomain = (domainIndex: number) => {
-    const clusters = (sceneIndex.manifest?.clusters ?? []).filter((c) => c.domain === domainIndex);
-    if (clusters.length === 0) return;
-    // Frame every cluster in the domain at once — the same centroid-and-spread
-    // path the agent will use in Phase 5.
     const dirs = clusters.map((c) => {
       const st = Math.sin(c.theta);
       return new THREE.Vector3(st * Math.cos(c.phi), Math.cos(c.theta), st * Math.sin(c.phi));
     });
-    void globeCamera.flyToDirections(dirs, { padding: 0.1 });
+    void globeCamera.flyToDirections(dirs, { padding: 0.12 });
   };
-
-  const latest = benchResults[0];
 
   return (
     <div className="hud">
-      <div className="panel panel--left">
-        <h1>
-          GitGlobe <span className="tag">phase 0</span>
-        </h1>
+      <Intro />
+      {entered && <Reticle />}
 
-        {loadError ? (
-          <p className="error">{loadError}</p>
-        ) : (
-          <dl className="stats">
-            <dt>points</dt>
-            <dd>{totalPoints.toLocaleString()}</dd>
-            <dt>bands</dt>
-            <dd>{loadedBands.join(', ') || '—'}</dd>
-            <dt>tier</dt>
-            <dd>{tier}</dd>
-            <dt>fps</dt>
-            <dd className={fps > 0 && fps < 55 ? 'warn' : undefined}>{fps.toFixed(0)}</dd>
-          </dl>
-        )}
-
-        <div className="row">
-          <button onClick={flyRandomCluster}>Fly to a cluster</button>
-          <button onClick={() => void globeCamera.reset()}>Reset view</button>
-        </div>
-
-        <label className="control">
-          <span>point size</span>
-          <input
-            type="range"
-            min={8}
-            max={120}
-            step={2}
-            value={sizeScale}
-            onChange={(e) => useGlobeStore.getState().setSizeScale(Number(e.target.value))}
-          />
-        </label>
-
-        <label className="control control--check">
-          <input
-            type="checkbox"
-            checked={autoRotate}
-            onChange={(e) => useGlobeStore.getState().setAutoRotate(e.target.checked)}
-          />
-          <span>auto-rotate</span>
-        </label>
-
+      <header className={`topbar${entered ? '' : ' topbar--hidden'}`}>
         <button
-          className="bench"
-          disabled={benchRunning || totalPoints === 0}
-          onClick={() => useGlobeStore.getState().setBenchRunning(true)}
+          className="wordmark"
+          onClick={() => {
+            useGlobeStore.getState().setActiveDomain(-1);
+            useGlobeStore.getState().setSelected(-1);
+            void globeCamera.reset();
+          }}
         >
-          {benchRunning ? 'Measuring… 10s' : 'Run 10s benchmark'}
+          GitGlobe
         </button>
 
-        {latest && (
-          <div className={`bench-result ${latest.passed ? 'pass' : 'fail'}`}>
-            <strong>{latest.passed ? 'PASS' : 'FAIL'}</strong>
-            <span>
-              p50 {latest.p50.toFixed(1)}ms · p95 {latest.p95.toFixed(1)}ms · p99 {latest.p99.toFixed(1)}ms
-            </span>
-            <span>
-              {latest.fps.toFixed(0)} fps avg · worst {latest.worst.toFixed(0)}ms · {latest.drawCalls} draw calls
-            </span>
-            <span className="muted">exit criterion: p95 ≤ 16.7ms and no frame ≥ 100ms</span>
-          </div>
-        )}
-      </div>
-
-      <div className="panel panel--right">
-        <h2>Domains</h2>
-        <ul className="legend">
+        <nav className="tabs">
+          <button
+            className={activeDomain === -1 ? 'is-active' : undefined}
+            onClick={() => {
+              useGlobeStore.getState().setActiveDomain(-1);
+              void globeCamera.reset();
+            }}
+          >
+            All
+          </button>
           {domains.map((d, i) => (
-            <li key={d}>
-              <button onClick={() => flyToDomain(i)}>
-                <i style={{ background: rgb(i) }} />
-                {d}
-              </button>
-            </li>
+            <button
+              key={d}
+              className={activeDomain === i ? 'is-active' : undefined}
+              onClick={() => flyToDomain(i)}
+              style={activeDomain === i ? { color: rgb(i), borderBottomColor: rgb(i) } : undefined}
+            >
+              {d}
+            </button>
           ))}
-        </ul>
-      </div>
+        </nav>
 
-      <div className="readout">
-        {hovered ? (
-          <>
-            <i style={{ background: rgb(hovered.domain) }} />
-            repo #{hovered.repoId} · {domains[hovered.domain] ?? 'unknown'} · band {hovered.band}
-          </>
-        ) : (
-          <span className="muted">hover a point — drag to orbit, scroll to zoom, click to fly</span>
-        )}
-        {selected && <span className="muted"> · selected #{selected.repoId}</span>}
-      </div>
+        <button
+          className="topbar__toggle"
+          onClick={() => useGlobeStore.getState().setShowTelemetry(!showTelemetry)}
+          aria-pressed={showTelemetry}
+        >
+          {showTelemetry ? '↳ hide stats' : '↳ stats'}
+        </button>
+      </header>
+
+      {entered && showTelemetry && <Telemetry />}
+
+      {entered && (
+        <div className="readout">
+          {selected ? (
+            <>
+              <i style={{ background: rgb(selected.domain) }} />
+              <strong>{repoIdentity(selected.repoId, selected.domain).fullName}</strong>
+              <span className="muted">
+                {focusArcCount} connections · click again to release
+              </span>
+            </>
+          ) : hoveredId >= 0 ? (
+            <span className="muted">↳ click to pin this node and hold its connections</span>
+          ) : (
+            <span className="muted">↳ drag to orbit · scroll to zoom · hover a node</span>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function Telemetry() {
+  const fps = useFps();
+  const {
+    totalPoints,
+    loadedBands,
+    graphReady,
+    ambientArcCount,
+    focusArcCount,
+    tier,
+    sizeScale,
+    autoRotate,
+    showAmbientArcs,
+    benchRunning,
+    benchResults,
+  } = useGlobeStore();
+
+  const graphMeta = sceneIndex.manifest?.graph;
+  const latest = benchResults[0];
+
+  return (
+    <section className="telemetry">
+      <span className="telemetry__bracket telemetry__bracket--tl" />
+      <span className="telemetry__bracket telemetry__bracket--br" />
+
+      <dl className="stats">
+        <dt>nodes</dt>
+        <dd>{totalPoints.toLocaleString()}</dd>
+        <dt>bands</dt>
+        <dd>{loadedBands.join(' ') || '—'}</dd>
+        <dt>edges</dt>
+        <dd>{graphMeta ? graphMeta.directedEdges.toLocaleString() : '—'}</dd>
+        <dt>backbone</dt>
+        <dd>{graphReady ? ambientArcCount.toLocaleString() : '—'}</dd>
+        <dt>focus arcs</dt>
+        <dd className={focusArcCount > 0 ? 'live' : undefined}>{focusArcCount || '—'}</dd>
+        <dt>tier</dt>
+        <dd>{tier}</dd>
+        <dt>fps</dt>
+        <dd className={fps > 0 && fps < 55 ? 'warn' : 'live'}>{fps.toFixed(0)}</dd>
+      </dl>
+
+      {graphMeta && (
+        <p className="note">
+          pagerank d=0.85 · {graphMeta.pagerank.iterations} iter ·{' '}
+          {graphMeta.pagerank.converged ? 'converged' : 'CAPPED'}
+          <br />
+          degree med {graphMeta.degree.p50} · p99 {graphMeta.degree.p99} · max{' '}
+          {graphMeta.degree.max.toLocaleString()}
+        </p>
+      )}
+
+      <label className="control">
+        <span>
+          node size <em>{sizeScale}</em>
+        </span>
+        <input
+          type="range"
+          min={8}
+          max={120}
+          step={2}
+          value={sizeScale}
+          onChange={(e) => useGlobeStore.getState().setSizeScale(Number(e.target.value))}
+        />
+      </label>
+
+      <label className="control control--check">
+        <input
+          type="checkbox"
+          checked={showAmbientArcs}
+          onChange={(e) => useGlobeStore.getState().setShowAmbientArcs(e.target.checked)}
+        />
+        <span>backbone web</span>
+      </label>
+
+      <label className="control control--check">
+        <input
+          type="checkbox"
+          checked={autoRotate}
+          onChange={(e) => useGlobeStore.getState().setAutoRotate(e.target.checked)}
+        />
+        <span>auto-rotate</span>
+      </label>
+
+      <button
+        className="bench"
+        disabled={benchRunning || totalPoints === 0}
+        onClick={() => useGlobeStore.getState().setBenchRunning(true)}
+      >
+        {benchRunning ? '◈ measuring — 12s' : '◈ run benchmark'}
+      </button>
+
+      {latest && (
+        <div className={`bench-result ${latest.passed ? 'pass' : 'fail'}`}>
+          <strong>{latest.passed ? 'PASS' : 'FAIL'}</strong>
+          <span>
+            {latest.dropped}/{latest.sampled} frames dropped ({(latest.dropRatio * 100).toFixed(2)}%)
+          </span>
+          <span>
+            {latest.refreshHz.toFixed(0)}Hz display · worst {latest.worst.toFixed(0)}ms
+          </span>
+          <span className="headroom">
+            {latest.headroom}× headroom · {latest.drawCalls} calls ·{' '}
+            {(latest.triangles / 1000).toFixed(0)}k tris
+          </span>
+          <span className="muted">gate: &lt;1% dropped, no frame ≥ 100ms</span>
+        </div>
+      )}
+    </section>
   );
 }

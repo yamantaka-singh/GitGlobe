@@ -1,12 +1,12 @@
 # GitGlobe — Phase 0: prove the renderer
 
-The point of this phase is to answer one question before anything else gets
-built: **can a browser draw a hundred thousand — then a million — glowing points
-on a sphere at 60fps, with hover-picking and a smooth camera?**
+One question, answered before anything else gets built: **can a browser draw a
+hundred thousand — then a million — repositories on a sphere at 60fps, with a
+live connection web, accurate hover-picking, and a smooth camera?**
 
-No real data. No embeddings. No API. If the answer is no, we find out in a day
-and switch renderers ([ADR-001](../docs/ARCHITECTURE.md#adr-001-renderer--threejs-vs-deckgl))
-with the entire data layer untouched.
+No real data yet. If the answer is no, we find out in a day and switch renderers
+([ADR-001](../docs/ARCHITECTURE.md#adr-001-renderer--threejs-vs-deckgl)) with the
+entire data layer untouched.
 
 ---
 
@@ -15,25 +15,57 @@ with the entire data layer untouched.
 ```bash
 cd web
 npm install
-npm run setup     # generates 100k synthetic points and verifies the tiles
+npm run setup     # generates the world (100k nodes + graph) and verifies it
 npm run dev
 ```
 
-Then open the printed URL. Drag to orbit, scroll to zoom, hover a point, click
-to fly to it, or click a domain in the right-hand panel.
+Drag to orbit, scroll to zoom. **Hover a node** to see its identity and light up
+its connections; **click** to pin it. `↳ top hub` flies to the single most
+depended-upon repository in the graph.
 
-**Hit `Run 10s benchmark`.** That is the exit criterion, measured rather than
+Hit `◈ run benchmark`. That is the exit criterion, measured rather than
 eyeballed.
 
 ### The stress run — this is the one that matters
 
 ```bash
-npm run gen:tiles:stress    # 1,000,000 points, 12 MB of tiles
+npm run gen:world:stress    # 1,000,000 nodes
 ```
 
-Reload and benchmark again. 100k is the comfortable working default for
-iterating on the look; **1M is the number Phase 0 exists to prove.** A renderer
-that holds 60fps at 100k and collapses at 1M has not passed.
+100k is the comfortable default for iterating on the look. **1M is the number
+Phase 0 exists to prove.** A renderer that holds 60fps at 100k and collapses at
+1M has not passed.
+
+---
+
+## What the world generator produces
+
+```
+public/tiles/
+  manifest.json   layout version, bands, domains, cluster centres, graph stats
+  band-0.bin      top 2% by PageRank      — always loaded
+  band-1.bin      next 18%
+  band-2.bin      the remaining 80%
+  graph.bin       PageRank + CSR adjacency + the ambient backbone
+```
+
+Nothing here is uniform noise, deliberately. Positions come from **von
+Mises-Fisher clusters** at varying concentrations; edges come from
+**Barabási–Albert preferential attachment** biased toward a node's own domain.
+That yields a genuine power law — at 100k nodes: median degree 4, p99 34, max
+655 — and mostly intra-domain dependencies with a few cross-domain bridges.
+Uniform noise would let a renderer "pass" Phase 0 while being unable to cope
+with the clumped, wildly-varying-density data Phase 2 produces.
+
+**PageRank** (damping 0.85, power iteration to L1 < 1e-10) then drives four
+things: node radius and brightness, LOD band assignment, which edges form the
+ambient backbone, and which nodes are prominent enough to matter.
+
+PageRank ranks *nodes*, so it cannot invent edges — those come from the
+attachment process, and from deps.dev in Phase 1. What it decides is **which of
+the edges are worth drawing**, which is what turns a hairball into a legible
+structure. The verifier measures this: backbone endpoints average **1,638× the
+mean node rank**.
 
 ---
 
@@ -41,122 +73,146 @@ that holds 60fps at 100k and collapses at 1M has not passed.
 
 | | Target | Where it's measured |
 |---|---|---|
-| p95 frame time | ≤ 16.7ms | benchmark panel |
+| Dropped frames | < 1% | benchmark panel |
 | Worst frame | < 100ms | benchmark panel |
-| Draw calls | ≤ 4 | benchmark panel / r3f-perf |
-| Hover accuracy | correct point, every time | readout at the bottom |
-| Fly-to | frames the target smoothly, no snap | domain buttons |
+| Headroom | ≥ 2× at the target node count | benchmark panel |
+| Hover accuracy | the node under the cursor, every time | reticle |
+| Fly-to | frames the target smoothly, no snap | domain tabs |
 
-The benchmark drives a **deterministic** orbit — a full revolution plus polar
-and dolly oscillation, identical every run — so two runs are comparable and a
-regression is visible. It reports percentiles, not average fps, because average
-fps hides the stutter that actually makes a scene feel bad. 60fps average with
-two 90ms spikes per second is a failure, and only p95/p99 show it.
+### Why the gate is not "p95 ≤ 16.7ms"
+
+It was, and that was wrong. `requestAnimationFrame` is vsync-locked: on a 60Hz
+display the interval between callbacks is 16.67ms whether the renderer is nearly
+idle or one particle from collapse. Gating on that interval measures the
+*monitor*, not the scene — a perfectly healthy renderer scores p50 16.7 / p95
+17.1 and "fails" a threshold it can never clear.
+
+What "sustained 60fps" actually means is **no dropped frames**, so the benchmark
+now:
+
+1. **Calibrates** the display period from the median warmup interval (16.67ms at
+   60Hz, 8.33 at 120Hz — it adapts to your monitor).
+2. **Counts dropped frames** over a deterministic 6-second orbit. A frame is
+   dropped when its interval exceeds 1.5× the period.
+3. **Probes headroom** by rendering the scene N extra times per frame and finding
+   the largest N that still holds the refresh rate.
+
+Headroom is the number that matters, because vsync hides everything above the
+line. Without it you cannot tell "comfortable" from "barely coping" — both report
+60fps. **3× headroom at 100k is what predicts that 1M will hold.**
 
 Test on a laptop integrated GPU, not just a discrete one.
 
 ---
 
-## What's here
+## Layout
 
 ```
 scripts/
-  gen-tiles.ts      synthetic tile generator (vMF clusters, not uniform noise)
-  verify-tiles.ts   data-integrity checks — also used on real Phase 2 tiles
+  gen-world.ts      positions → graph → PageRank → tiles + graph.bin
+  verify-world.ts   30 integrity checks over both artifacts
 src/
-  tile/
-    format.ts       binary tile encode/decode — docs/ARCHITECTURE.md §2.6
-    format.test.ts  round-trip, quantisation error, pole and seam edge cases
-    loader.ts       manifest + band fetching, layout-version guard
+  tile/format.ts    12 bytes per node — docs/ARCHITECTURE.md §2.6
+  graph/
+    pagerank.ts     pure CSR power iteration, tested to known answers
+    format.ts       graph.bin encode/decode, CSR neighbour queries
   globe/
-    shaders.ts      the whole renderer, really — GLSL for display and picking
-    PointCloud.tsx  one THREE.Points per LOD band, one draw call each
-    usePicking.ts   1x1 scissored GPU pick pass, layer-isolated, 30Hz
-    Backdrop.tsx    starfield, atmosphere shell, opaque core
-    Scene.tsx       lifecycle-organised scene graph + tile loading
-  camera/Rig.tsx    the single owner of the camera; flyTo lives here
-  bench/            deterministic benchmark harness
-  perf/             device tiering and measured demotion
-  store/            zustand — kept out of the render hot path
-  ui/Hud.tsx        stats, controls, legend, benchmark readout
+    shaders.ts      point display + GPU-pick shaders
+    arcShaders.ts   slerped ribbon arcs with a travelling pulse
+    ArcLayer.tsx    fixed-capacity GPU-resident arc pool
+    PointCloud.tsx  one THREE.Points per LOD band
+    Backdrop.tsx    starfield, gridded core, rim + scatter shells, equator ring
+    usePicking.ts   1×1 scissored GPU pick pass, layer-isolated, 30Hz
+    useAnchor.ts    projects the hovered node to screen space for the reticle
+  camera/Rig.tsx    the single owner of the camera
+  repo/names.ts     procedural repository names
+  ui/Reticle.tsx    corner brackets + leader line + identity card
 ```
 
 ---
 
 ## Design decisions worth knowing before you edit
 
-**The quantised angles ride in `position`.** three.js derives the draw count
-from `geometry.attributes.position`, so the geometry must have one. Rather than
-pay 12 MB for a dummy Float32 xyz *alongside* the real data, `position` is a
-Uint16 attribute carrying `(thetaQ, phiQ, sizeQ)` — all three fit in 16 bits.
-6 bytes per point, nothing wasted. The vertex shader reconstructs the unit
-direction. See `shaders.ts`.
+**The quantised angles ride in `position`.** three.js derives the draw count from
+`geometry.attributes.position`, so the geometry must have one. Rather than pay
+12 MB for a dummy Float32 xyz *alongside* the real data, `position` is a Uint16
+attribute carrying `(thetaQ, phiQ, sizeQ)` — all three fit in 16 bits. 6 bytes
+per node, nothing wasted.
 
-**One shared vertex preamble for display and picking.** If the two passes
-computed position separately they would eventually disagree, and a picking bug
-caused by drifting position maths is close to undebuggable.
+**Arc geometry is computed entirely in the vertex shader.** Each vertex knows
+only its two endpoints and its position along the arc; the shader slerps the
+great circle, lifts it, and expands the ribbon toward the camera. The travelling
+pulse is therefore one uniform write per frame — hovering a hub with 600
+neighbours costs the same as hovering a leaf.
 
-**Culling happens in the vertex shader.** Points on the far hemisphere are
-pushed outside the clip volume, which removes roughly half the fragment work
-with zero CPU cost and no index rebuild.
+**Arcs are two buffers, one shader.** `ambient` is static (the PageRank
+backbone); `focus` is a 256-arc pool whose endpoints are rewritten on hover.
+Neither ever reallocates geometry.
 
-**No raycasting anywhere.** `raycast = () => null` on every object. GPU picking
-renders ids as colours into a 1×1 target at the cursor and reads one pixel back
-— constant cost no matter how many points are on screen. The readback stalls the
-pipeline, so it is throttled to 30Hz and skipped entirely during camera flights.
+**Depth does the occlusion.** The core sphere is opaque and writes depth, so arcs
+passing behind the globe are hidden correctly without any sorting.
 
-**Nothing allocates in `useFrame`.** Vectors are module-scope scratch. Per-frame
-allocation produces the sawtooth GC stutter that shows up as random hitches.
+**The atmosphere is three layers, not one.** A single Fresnel shell has no edge,
+so the eye never finds the horizon and it reads as a soft lamp. A hard rim
+(`pow 9`), a wide scatter (`pow 2.6`), and a grazing-angle grid on the core give
+the silhouette a boundary and the surface a sense of curvature.
+
+**Picking is size-biased.** The pick shader offsets depth in proportion to node
+size, so overlapping nodes resolve to the more significant one. Combined with
+dropping hit padding from 5px to 2.5px, this is the fix for hover landing on a
+neighbour instead of the node under the cursor.
+
+**Names are procedural.** `#48213` reads as a dot; `vecstore-rs` reads as a
+repository. A deterministic hash of the repo id against per-domain word lists —
+zero bytes on the wire. Phase 1 deletes `repo/names.ts` entirely.
+
+**Nothing allocates in `useFrame`.** Vectors are module-scope scratch.
 
 **The camera has exactly one owner.** `globeCamera` in `camera/Rig.tsx`.
-`flyToDirections` takes *directions derived from real points* — never a
+`flyToDirections` takes directions derived from real nodes — never a
 caller-supplied coordinate. That is what will make
-[ADR-006](../docs/ARCHITECTURE.md#adr-006-agent-camera-control-protocol)
-(the agent emits repo ids, never lat/lon) enforceable in Phase 5 rather than
-merely intended.
-
-**Synthetic data is clustered, not uniform.** Uniform points on a sphere look
-nothing like a UMAP layout and would let a renderer "pass" Phase 0 while being
-unable to cope with the clumped, wildly-varying-density data Phase 2 produces.
-The generator samples von Mises-Fisher clusters at varying concentrations plus a
-diffuse background.
-
-**Node size comes from log-scaled Pareto stars.** The first version sampled
-`pow(rnd(), 3.2)` and `verify-tiles` immediately caught the consequence: the top
-2% of repos all landed within 0.975–1.000, so every important repo would have
-rendered the same size. Star counts are power-law and radius scales with *log*
-stars ([ADR-008](../docs/ARCHITECTURE.md#adr-008-node-size-signal)).
+[ADR-006](../docs/ARCHITECTURE.md#adr-006-agent-camera-control-protocol) — the
+agent emits repo ids, never lat/lon — enforceable in Phase 5 rather than merely
+intended.
 
 ---
 
 ## Known gaps, to close before Phase 3
 
-- **Tiles are loaded whole, per band.** Phase 3 replaces this with per-S2-cell
+- **Tiles load whole, per band.** Phase 3 replaces this with per-S2-cell
   streaming, `AbortController` on cells that scroll away, and LRU eviction.
-- **`sceneIndex.resolve` is a linear scan across bands.** Fine at 3 bands;
-  needs a proper index once cells number in the hundreds.
+- **`sceneIndex.resolve` is a linear scan across bands.** Fine at 3; needs a real
+  index once cells number in the hundreds.
 - **No screen-space label collision.** Nebula labels arrive in Phase 3.
-- **Keyboard navigation is not implemented.** There must be a full keyboard path
-  to search → results → repo detail that never requires the canvas. Tracked for
-  Phase 7, but do not let it slip past that.
+- **No keyboard path.** There must be a way to reach search → results → node
+  detail without the canvas. Tracked for Phase 7; do not let it slip past that.
 - **The palette has not been through a colour-blindness simulator.** Hues are
   spaced with that in mind; it has not been verified.
+- **`graph.bin` is 4.4 MB and loads whole.** At 1M nodes it will need the same
+  per-cell treatment as tiles.
 
 ---
 
 ## Troubleshooting
 
-**"No tile manifest (HTTP 404)"** — run `npm run gen:tiles` first.
+**"No tile manifest (HTTP 404)"** — run `npm run gen:world`.
 
-**Everything is one white blob** — point size scale is too high for your DPR.
-Drag the `point size` slider down; the default of 32 is calibrated for a
-2.6-radius camera at DPR 2.
+**Layout version mismatch** — regenerate; tiles and graph must come from the
+same run.
 
-**Hover highlights the wrong point** — the display and pick passes have drifted
-out of sync. Check that both materials get the same `uSizeScale` and `uRadius`,
-and that `uPixelRatio` is 1 on the pick material (its target is 1×1, so point
-sizes there are in CSS pixels).
+**Everything is one white blob** — node size scale is too high for your DPR.
+Drag `node size` down; the default of 32 is calibrated for a 2.6-radius camera
+at DPR 2.
 
-**Black screen, no errors** — check the browser console for a shader compile
-failure. Structs and early `return` in GLSL ES 1.00 are supported but some
-mobile drivers are strict; the error text will name the line.
+**Hover highlights the wrong node** — the display and pick passes have drifted
+apart. Both materials must get the same `uSizeScale` and `uRadius`, and
+`uPixelRatio` must be 1 on the pick material (its target is 1×1, so point sizes
+there are in CSS pixels).
+
+**Arcs flicker or disappear at the limb** — expected near the horizon, where the
+ribbon goes edge-on. If they vanish over the *front* of the globe, the core
+sphere radius has crept above the arc lift.
+
+**Black screen, no errors** — check the console for a shader compile failure.
+Structs and early `return` in GLSL ES 1.00 are supported but some mobile drivers
+are strict; the error text names the line.
