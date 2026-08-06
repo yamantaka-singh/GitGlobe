@@ -10,10 +10,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:tiles": "tsx scripts/gen-tiles.ts",
-    "gen:tiles:stress": "tsx scripts/gen-tiles.ts --total 1000000",
-    "verify:tiles": "tsx scripts/verify-tiles.ts",
-    "setup": "npm run gen:tiles && npm run verify:tiles"
+    "gen:world": "tsx scripts/gen-world.ts",
+    "gen:world:stress": "tsx scripts/gen-world.ts --total 1000000",
+    "verify": "tsx scripts/verify-world.ts",
+    "setup": "npm run gen:world && npm run verify && npm run preview:planet",
+    "preview:planet": "tsx scripts/preview-planet.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.0.0",

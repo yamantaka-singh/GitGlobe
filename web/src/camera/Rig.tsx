@@ -54,7 +54,7 @@ class GlobeCamera {
 
     const altitude = this.radius * (1.18 + spread * 1.7 + (opts.padding ?? 0));
     _eye.copy(_centroid).multiplyScalar(altitude);
-    _target.copy(_centroid).multiplyScalar(this.radius);
+    _target.set(0, 0, 0);
 
     const store = useGlobeStore.getState();
     store.setCameraBusy(true);
@@ -91,6 +91,17 @@ class GlobeCamera {
     }
   }
 
+  /**
+   * The pre-entry framing: far out, slightly above, so `reset()` has somewhere
+   * to travel from when the user presses Start. Instant — this is where the
+   * globe already is, not a move the user should see.
+   */
+  async establish() {
+    if (!this.controls) return;
+    const d = this.radius * 5.4;
+    await this.controls.setLookAt(d * 0.34, d * 0.30, d, 0, 0, 0, false);
+  }
+
   /** Used by the benchmark to drive a deterministic orbit. */
   setOrbitAngle(azimuth: number, polar: number, distance: number) {
     this.controls?.rotateTo(azimuth, polar, false);
@@ -123,11 +134,17 @@ export function Rig({ radius }: { radius: number }) {
     c.polarRotateSpeed = 0.55;
     // The globe stays centred: panning it off-axis makes the sphere metaphor
     // fall apart and there is no way back without a reset.
+    c.mouseButtons.left = CameraControlsImpl.ACTION.ROTATE;
     c.mouseButtons.right = CameraControlsImpl.ACTION.NONE;
     c.mouseButtons.middle = CameraControlsImpl.ACTION.DOLLY;
+    c.mouseButtons.wheel = CameraControlsImpl.ACTION.DOLLY;
+    c.touches.one = CameraControlsImpl.ACTION.TOUCH_ROTATE;
     c.touches.two = CameraControlsImpl.ACTION.TOUCH_DOLLY;
+    c.touches.three = CameraControlsImpl.ACTION.NONE;
 
-    void globeCamera.reset(true);
+    // Start at the establishing framing, not the working one — the Intro
+    // overlay is up, and Start needs somewhere to fly from.
+    void globeCamera.establish();
     invalidate();
     return () => {
       globeCamera.controls = null;
@@ -135,8 +152,8 @@ export function Rig({ radius }: { radius: number }) {
   }, [radius, invalidate]);
 
   useFrame((_, delta) => {
-    const { autoRotate, cameraBusy, reducedMotion } = useGlobeStore.getState();
-    if (!autoRotate || cameraBusy || reducedMotion) return;
+    const { autoRotate, cameraBusy, reducedMotion, hoveredId, selectedId } = useGlobeStore.getState();
+    if (!autoRotate || cameraBusy || reducedMotion || hoveredId >= 0 || selectedId >= 0) return;
     ref.current?.rotate(delta * 0.045, 0, false);
   });
 

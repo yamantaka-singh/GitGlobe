@@ -3,5 +3,9 @@ dist/
 .DS_Store
 *.local
 
-# Generated tiles — 12 MB of synthetic data, reproducible with `npm run gen:tiles`
+# Generated world — reproducible with `npm run gen:world`
 public/tiles/
+
+# Planet diagnostics — reproducible with `npm run preview:planet`
+public/planet-preview.png
+public/planet-globe.png

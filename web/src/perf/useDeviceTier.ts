@@ -13,9 +13,11 @@ import { useGlobeStore, type Tier } from '../store/useGlobeStore';
  */
 export function TIER_BUDGET(tier: Tier) {
   return {
-    low: { maxBand: 0, dprCap: 1.0, targetMs: 33 },
-    mid: { maxBand: 1, dprCap: 1.5, targetMs: 20 },
-    high: { maxBand: 2, dprCap: 2.0, targetMs: 16.7 },
+    // The ambient arc layer is fill-rate bound — ribbons are big translucent
+    // quads — so it is the first thing to go on a weak GPU, before point count.
+    low: { maxBand: 0, dprCap: 1.0, targetMs: 33, ambientArcs: 0 },
+    mid: { maxBand: 1, dprCap: 1.5, targetMs: 20, ambientArcs: 900 },
+    high: { maxBand: 2, dprCap: 2.0, targetMs: 16.7, ambientArcs: 2000 },
   }[tier];
 }
 

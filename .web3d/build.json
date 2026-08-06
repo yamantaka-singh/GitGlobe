@@ -10,16 +10,17 @@
   },
   "budgets": {
     "desktop": {
-      "frameTimeMs": 16.7,
-      "p95FrameTimeMs": 16.7,
+      "droppedFrameRatio": 0.01,
       "worstFrameMs": 100,
-      "drawCalls": 8,
-      "programs": 8,
+      "headroomMultiplier": 2,
+      "drawCalls": 12,
+      "programs": 10,
       "timeToFirstPaintMs": 2500
     },
     "mobileMid": {
-      "frameTimeMs": 33,
-      "drawCalls": 6
+      "droppedFrameRatio": 0.03,
+      "worstFrameMs": 150,
+      "drawCalls": 8
     },
     "custom": {
       "pointsRendered": 1000000,
@@ -27,23 +28,49 @@
       "fullTilePayloadMB": 12,
       "bytesPerPoint": 12,
       "pickLatencyFrames": 1,
-      "arcsOnScreenMax": 2000
+      "arcsOnScreenMax": 2000,
+      "ambientArcs": 2000,
+      "focusArcCapacity": 256,
+      "arcTriangles": 80000,
+      "graphBytesAt100k": 4400000,
+      "planetTexturePx": 2048,
+      "planetBakeMs": 50,
+      "landFraction": [
+        0.18,
+        0.55
+      ]
     }
   },
   "artDirection": {
-    "mood": "deep space, cold and quiet",
-    "background": "#04060d",
-    "accent": "#6ba6ff",
-    "motion": ["slow", "weightless", "deliberate"],
-    "notes": "Additive blending on near-black is what makes dense regions read as nebulae. Pastel palettes wash out to grey here — colours must be bright and saturated."
+    "mood": "photographic planet on black — naturalistic surface, bright data",
+    "background": "#020204",
+    "accent": "#6E8BE8",
+    "secondary": "#7A66C9",
+    "warning": "#FF9C47",
+    "motion": [
+      "deliberate",
+      "weightless",
+      "measured"
+    ],
+    "reference": "populous.com/explore — Earth on pure black, periwinkle-to-violet rim, amber night-side city lights, white diamond markers",
+    "notes": "No cyan. The reference has no neon at all: a muted photographic body, a violet halo, and markers that are the only pure-white things on screen. That hierarchy is what keeps 100k data points readable over terrain.",
+    "explicitlyNotDoing": [
+      "bloom post-processing",
+      "scanlines",
+      "glitch",
+      "chromatic aberration",
+      "rounded pills"
+    ],
+    "typography": "Editorial sans for names and headlines; monospace strictly for telemetry. Monospace-only always reads as a terminal.",
+    "entry": "Intro overlay with headline + '↳ Start'. The camera reveal is the first thing the product does."
   },
   "gates": {
     "direction": "open",
     "scaffold": "closed",
     "assets": "n/a",
     "materials": "closed",
-    "motion": "open",
-    "ux": "open",
+    "motion": "closed",
+    "ux": "closed",
     "perf": "open",
     "ship": "open"
   },
@@ -72,6 +99,61 @@
       "id": "phase0-size-model",
       "decision": "Node size from log-scaled Pareto stars, one global monotone scale across LOD bands",
       "why": "pow(rnd(), k) saturates the top of the range — verify-tiles caught every top-2% repo landing in [0.975, 1.000]. Band-local rescaling would break size comparability across an LOD boundary."
+    },
+    {
+      "id": "phase05-graph-artifact",
+      "decision": "Edges live in graph.bin, separate from tiles",
+      "why": "Tiles stay a pure spatial-visual record. Mirrors production, where edges are in Postgres and never enter a tile."
+    },
+    {
+      "id": "phase05-arc-rendering",
+      "decision": "One GPU-resident ribbon mesh; slerp, lift and pulse all computed in the vertex shader",
+      "why": "Animation costs one uniform per frame. Hovering a 600-neighbour hub costs the same as a leaf."
+    },
+    {
+      "id": "phase05-pagerank-role",
+      "decision": "PageRank drives node size, LOD banding, and edge selection — not edge existence",
+      "why": "PageRank ranks nodes. What it can honestly decide is which of the edges are worth drawing, which is what makes a hairball legible."
+    },
+    {
+      "id": "phase05-picking-bias",
+      "decision": "Pick padding 5px to 2.5px, plus size-biased depth",
+      "why": "The 5px hit area captured neighbours 2-3px from the cursor, so the highlight visibly snapped off-target."
+    },
+    {
+      "id": "phase05-atmosphere",
+      "decision": "Three layers — gridded core, hard rim (pow 9), wide scatter (pow 2.6)",
+      "why": "A single Fresnel shell has no edge, so the eye never finds the horizon and it reads as a lamp."
+    },
+    {
+      "id": "phase06-benchmark-gate",
+      "decision": "Gate on dropped frames and a headroom probe, not on p95 frame interval",
+      "why": "rAF is vsync-locked, so the interval measures the display not the scene. The old gate was unpassable on a 60Hz monitor and told us nothing about margin."
+    },
+    {
+      "id": "phase06-terminator",
+      "decision": "Fixed world-space sun direction shading the core, all three shells, and the points",
+      "why": "Without a light direction the sphere is uniformly dark and reads as a flat disc regardless of how good the rim is. Camera-relative light would look identical from every angle and defeat the purpose."
+    },
+    {
+      "id": "phase06-chrome",
+      "decision": "Top bar with domain tabs; all diagnostics behind a toggle",
+      "why": "Two dense always-on panels is what made it read as a debug tool. Populous keeps almost nothing on screen."
+    },
+    {
+      "id": "phase07-planet-bake",
+      "decision": "Terrain baked once into a 2048x1024 equirectangular RGBA texture; RGB albedo, A city lights",
+      "why": "Per-fragment fBm plus a 64-cluster loop is unaffordable per frame and trivial as a one-time pass. One texture fetch afterwards."
+    },
+    {
+      "id": "phase07-geography-from-layout",
+      "decision": "Continents grow from cluster potential, so territories ARE sectors",
+      "why": "Makes the semantic map literal. Also forced a real fix: domains were assigned by cluster index, scattering each domain across the globe and breaking fly-to-domain."
+    },
+    {
+      "id": "phase07-cpu-preview",
+      "decision": "scripts/preview-planet.ts renders the same formula in Node and fails on bad land fraction",
+      "why": "The first shader produced 100% land. Without a headless render nobody finds that until they open a browser."
     }
   ]
 }

@@ -2,6 +2,8 @@ import { Suspense, useEffect, useRef, useState, type ComponentType } from 'react
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 
+import { SPACE } from './globe/palette';
+
 import { Scene } from './globe/Scene';
 import { Hud } from './ui/Hud';
 
@@ -57,7 +59,10 @@ export function App() {
         }}
         camera={{ fov: 40, near: 0.01, far: 100, position: [0, 0.7, 2.6] }}
         onCreated={({ gl }) => {
-          gl.setClearColor(new THREE.Color('#04060d'), 1);
+          // Not quite black. Pure #000 makes the atmosphere rim look like a
+          // sticker cut out and pasted on; a few points of blue give it
+          // somewhere to fall off to.
+          gl.setClearColor(new THREE.Color(...SPACE), 1);
         }}
       >
         <Suspense fallback={null}>
