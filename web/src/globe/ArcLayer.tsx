@@ -223,7 +223,7 @@ export const FOCUS_STYLE: ArcStyle = {
   focusBoost: 0,
 };
 
-export function ArcLayer({ pool, radius }: { pool: ArcPool; radius: number }) {
+export function ArcLayer({ pool, radius: _radius }: { pool: ArcPool; radius: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const { camera, size } = useThree();
   const reducedMotion = useGlobeStore((s) => s.reducedMotion);

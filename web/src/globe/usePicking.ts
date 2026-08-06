@@ -70,7 +70,7 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
 
   useFrame(() => {
     if (!enabled || clouds.length === 0) return;
-    if (!pointer.current.dirty) return;
+    if (pointer.current.x < 0 || pointer.current.y < 0) return;
     // Picking during a fly-to is wasted work and adds a readback stall to the
     // one moment the frame budget is tightest.
     if (useGlobeStore.getState().cameraBusy) return;
