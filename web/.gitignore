@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# Generated tiles — 12 MB of synthetic data, reproducible with `npm run gen:tiles`
+public/tiles/
