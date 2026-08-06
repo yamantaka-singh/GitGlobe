@@ -106,7 +106,7 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
         // of "I pointed there and it selected something else" — which is
         // exactly what made the first version feel like the dots and the repos
         // were in different places.
-        uPickPadding: { value: 16.0 },
+        uPickPadding: { value: 6.0 },
         uIdOffset: { value: idOffset },
         // Depth bias in NDC units. Small enough that it only resolves genuine
         // overlaps, large enough to always beat the sphere's own curvature.

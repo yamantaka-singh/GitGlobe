@@ -208,10 +208,9 @@ ${VERTEX_COMMON}
     // fraction of a millimetre, and hovering feels arbitrary.
     gl_Position.z -= p.size * uSizeBias * gl_Position.w;
 
-    // Inflate slightly so small points stay hittable without demanding
-    // sub-pixel mouse accuracy. Keep this tight: every extra pixel is another
-    // pixel of "I clicked there and it selected something else".
-    gl_PointSize = p.pointSize > 0.0 ? max(p.pointSize, uPickPadding) : 0.0;
+    // Inflate slightly (+4px margin, min 6px) so points are easy to hit without
+    // giant fixed boxes swallowing neighboring nodes in dense clusters when zoomed in.
+    gl_PointSize = p.pointSize > 0.0 ? max(p.pointSize + 4.0, uPickPadding) : 0.0;
 
     // Global id + 1, so a cleared black buffer decodes to "nothing".
     float id = aIndex + uIdOffset + 1.0;
