@@ -7,7 +7,7 @@ import { PLANET_SURFACE, DOMAIN_TERRAIN_TINT } from './palette';
 import type { TileManifest } from '../tile/loader';
 
 /** Equirectangular bake size by device tier. 2:1 aspect is mandatory. */
-const SIZE_BY_TIER = { low: 1024, mid: 1536, high: 2048 } as const;
+const SIZE_BY_TIER = { low: 1024, mid: 2048, high: 4096 } as const;
 
 /**
  * Bakes the planet surface into a texture, once.
@@ -43,6 +43,9 @@ export function usePlanetTexture(manifest: TileManifest | null, tier: keyof type
     // must blend into the first.
     target.texture.wrapS = THREE.RepeatWrapping;
     target.texture.wrapT = THREE.ClampToEdgeWrapping;
+    // Anisotropic filtering prevents the texture from blurring at the edges
+    // of the sphere where it is viewed at a steep angle.
+    target.texture.anisotropy = gl.capabilities.getMaxAnisotropy();
     // Linear, NOT sRGB. Every shader in this project is a raw ShaderMaterial
     // with no `colorspace_fragment` include, so nothing ever encodes to sRGB on
     // write. Tagging the target sRGB would make three decode on read without a
