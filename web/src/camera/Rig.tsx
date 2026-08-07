@@ -114,6 +114,7 @@ export const globeCamera = new GlobeCamera();
 export function Rig({ radius }: { radius: number }) {
   const ref = useRef<CameraControlsImpl>(null);
   const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
 
   useEffect(() => {
     globeCamera.radius = radius;
@@ -154,7 +155,9 @@ export function Rig({ radius }: { radius: number }) {
   useFrame((_, delta) => {
     const { autoRotate, cameraBusy, reducedMotion, hoveredId, selectedId } = useGlobeStore.getState();
     if (!autoRotate || cameraBusy || reducedMotion || hoveredId >= 0 || selectedId >= 0) return;
-    ref.current?.rotate(delta * 0.0225, 0, false);
+
+    // Decreased rotation speed as requested
+    ref.current?.rotate(delta * 0.0035, 0, false);
   });
 
   return <CameraControls ref={ref} makeDefault />;

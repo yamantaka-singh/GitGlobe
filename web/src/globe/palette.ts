@@ -1,71 +1,86 @@
 /**
- * Colour, sampled from the reference.
+ * Colour — an ice giant.
  *
- * The Populous globe is not a neon cyberpunk cliché — it is a photographic
- * Earth on pure black, with a periwinkle-to-violet atmosphere and amber city
- * lights on the night side. The restraint is the point: the planet is muted and
- * naturalistic, and the *markers* are the only pure-white, high-contrast things
- * on screen.
+ * Neptune's look comes from three things, and getting any one of them wrong
+ * makes it read as "a blue ball":
  *
- * That is exactly the hierarchy GitGlobe needs. The surface must stay quiet or
- * a hundred thousand data points become unreadable on top of it.
+ *  1. **Depth, not hue.** It is not one blue. It is a deep ultramarine base
+ *     with paler zones banded across it, and the contrast between them is low —
+ *     around 25% — which is why photographs look soft rather than striped.
+ *  2. **Methane cirrus.** Bright white streaks sitting *above* the bands,
+ *     catching light at a different angle. They are the detail that makes it
+ *     look like weather instead of paint.
+ *  3. **Dark storms.** A handful of near-black ovals, elongated in longitude,
+ *     with bright companion clouds at their edges.
  *
- * All values are linear-ish 0..1 RGB triples for direct use in shaders.
+ * The data layer sits on top of all of this, so everything here stays under
+ * roughly 0.55 luminance. A hundred thousand nodes have to remain the brightest
+ * things on screen.
  */
 
 type RGB = readonly [number, number, number];
 
-/** Terrain ramp. Deliberately desaturated — territories tint these, not replace them. */
 export const PLANET_SURFACE = {
-  /** Abyssal. Nearly the background, so oceans read as absence. */
-  deepOcean: [0.024, 0.055, 0.118] as RGB,
-  /** Continental shelf — where ocean meets land. */
-  shelf: [0.055, 0.145, 0.262] as RGB,
-  /** The first band of land. */
-  coast: [0.118, 0.235, 0.290] as RGB,
-  /** Plains and basins. Cool olive, as on the reference's African daylight. */
-  lowland: [0.196, 0.235, 0.180] as RGB,
-  /** Ranges and plateaus. The tan that dominates the lit half of the reference. */
-  highland: [0.478, 0.416, 0.298] as RGB,
-  /** Caps and cloud. Never pure white — that is reserved for the selected node. */
-  ice: [0.784, 0.839, 0.886] as RGB,
+  /** Abyssal ultramarine — the deepest visible layer, between the bands. */
+  deep: [0.031, 0.078, 0.243] as RGB,
+  /** The dominant body colour. */
+  mid: [0.106, 0.224, 0.545] as RGB,
+  /** Pale zones — upper-atmosphere haze catching more light. */
+  light: [0.259, 0.451, 0.804] as RGB,
+  /** Highest zones, almost cyan. Used sparingly or the planet turns turquoise. */
+  pale: [0.478, 0.702, 0.933] as RGB,
+  /** Methane cirrus. Never pure white — that belongs to the selected node. */
+  cirrus: [0.847, 0.925, 1.0] as RGB,
+  /** Storm cores, darker than the deepest band. */
+  storm: [0.016, 0.035, 0.125] as RGB,
 } as const;
 
 /**
- * Per-domain territory tints — muted cousins of the node palette.
+ * Per-domain tints for the great cloud systems.
  *
- * A domain's continent should be *recognisably* its colour without ever
- * competing with the nodes standing on it, so every entry here is roughly a
- * third of the saturation of its counterpart in DOMAIN_PALETTE.
+ * A territory on a gas giant is a persistent weather system, not a continent.
+ * Each is a subtle shift in the band colour — every entry stays inside the
+ * blue-violet family so the planet reads as one body rather than a paint chart.
  */
 export const DOMAIN_TERRAIN_TINT: readonly RGB[] = [
-  [0.106, 0.267, 0.353], // AI / ML — cold slate blue
-  [0.353, 0.243, 0.145] as RGB, // Web frameworks — burnt sienna
-  [0.145, 0.322, 0.259] as RGB, // Databases — deep jade
-  [0.337, 0.302, 0.176] as RGB, // DevOps — ochre
-  [0.235, 0.216, 0.361] as RGB, // Languages — indigo
-  [0.196, 0.318, 0.365] as RGB, // Systems — steel
-  [0.098, 0.263, 0.278] as RGB, // Data engineering — teal
-  [0.361, 0.196, 0.196] as RGB, // Security — oxide red
-  [0.294, 0.184, 0.341] as RGB, // Graphics — aubergine
-  [0.169, 0.224, 0.322] as RGB, // Mobile — dusk blue
-  [0.267, 0.322, 0.180] as RGB, // Scraping — moss
-  [0.243, 0.259, 0.290] as RGB, // Scientific — basalt
+  [0.180, 0.404, 0.780] as RGB, // AI / ML — cerulean
+  [0.400, 0.396, 0.741] as RGB, // Web frameworks — periwinkle
+  [0.153, 0.463, 0.639] as RGB, // Databases — teal blue
+  [0.451, 0.427, 0.667] as RGB, // DevOps — dusty violet
+  [0.322, 0.318, 0.741] as RGB, // Languages — indigo
+  [0.235, 0.514, 0.784] as RGB, // Systems — sky
+  [0.114, 0.396, 0.596] as RGB, // Data engineering — deep teal
+  [0.494, 0.373, 0.643] as RGB, // Security — mauve
+  [0.435, 0.353, 0.784] as RGB, // Graphics — violet
+  [0.208, 0.373, 0.729] as RGB, // Mobile — cobalt
+  [0.286, 0.510, 0.702] as RGB, // Scraping — steel cyan
+  [0.337, 0.408, 0.616] as RGB, // Scientific — slate blue
 ];
 
-/** Amber. Straight off the night side of the reference image. */
-export const CITY_LIGHT: RGB = [1.0, 0.612, 0.278];
+/**
+ * Night-side glow. On a gas giant there are no cities — this is aurora and
+ * storm luminance, which is both physically reasonable and the thing that keeps
+ * the dark limb from becoming a dead black crescent.
+ */
+export const CITY_LIGHT: RGB = [0.451, 0.855, 1.0];
 
 /**
- * The atmosphere in the reference runs periwinkle at the surface to violet at
- * the outer edge, not cyan. That shift is most of why it reads as photographic
- * rather than as a sci-fi glow.
+ * Neptune's atmosphere is thin and high, so the rim is a tight bright line
+ * rather than the wide bloom Earth gets. The violet outer scatter is what sells
+ * an ice giant specifically.
  */
 export const ATMOSPHERE = {
-  edge: [0.780, 0.839, 1.0] as RGB, // near-white hairline at the silhouette
-  rim: [0.431, 0.545, 0.910] as RGB, // periwinkle
-  scatter: [0.478, 0.400, 0.788] as RGB, // violet, wide and faint
+  edge: [0.729, 0.882, 1.0] as RGB,
+  rim: [0.302, 0.549, 0.973] as RGB,
+  scatter: [0.400, 0.353, 0.847] as RGB,
 } as const;
 
-/** Space. Not quite black — pure #000 makes the rim look like a sticker. */
-export const SPACE: RGB = [0.008, 0.008, 0.016];
+/** Deep space with a trace of blue, so the rim has somewhere to fall off to. */
+export const SPACE: RGB = [0.004, 0.006, 0.016];
+
+/** Nebula clouds in the background — dim, large, and slow. */
+export const NEBULA = {
+  warm: [0.361, 0.153, 0.318] as RGB, // dusty magenta
+  cool: [0.098, 0.180, 0.400] as RGB, // cold blue
+  core: [0.290, 0.318, 0.545] as RGB, // where they overlap
+} as const;

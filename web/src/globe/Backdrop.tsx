@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 
 import { SUN_DIR } from './lighting';
-import { ATMOSPHERE, CITY_LIGHT, PLANET_SURFACE } from './palette';
+import { ATMOSPHERE, CITY_LIGHT, NEBULA, PLANET_SURFACE, SPACE } from './palette';
 
 /**
  * Static subtree — nothing here changes after mount (web3d-scene-architect's
@@ -15,14 +15,131 @@ import { ATMOSPHERE, CITY_LIGHT, PLANET_SURFACE } from './palette';
  * thing on screen.
  */
 
+// ---------------------------------------------------------------- deep space
+
+const SKY_VERT = /* glsl */ `
+  varying vec3 vDir;
+  void main() {
+    vDir = normalize(position);
+    // Depth forced to the far plane so the sky never occludes anything and
+    // never needs sorting against the scene.
+    vec4 p = projectionMatrix * viewMatrix * vec4(position + cameraPosition, 1.0);
+    gl_Position = p.xyww;
+  }
+`;
+
+const SKY_FRAG = /* glsl */ `
+  precision mediump float;
+
+  uniform vec3 uSpace;
+  uniform vec3 uWarm;
+  uniform vec3 uCool;
+  uniform vec3 uCore;
+
+  varying vec3 vDir;
+
+  // Cheap value noise — the sky is huge in screen area, so this is the one
+  // place in the project where fragment cost really is the whole budget.
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419));
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float vnoise(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i + vec3(0,0,0)), hash(i + vec3(1,0,0)), f.x),
+          mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+          mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y),
+      f.z);
+  }
+
+  float fbmSky(vec3 p) {
+    float v = 0.0, a = 0.5;
+    for (int i = 0; i < 5; i++) { v += a * vnoise(p); p *= 2.1; a *= 0.5; }
+    return v;
+  }
+
+  void main() {
+    vec3 d = normalize(vDir);
+
+    // Two independent cloud fields at different scales and offsets. One field
+    // reads as a texture; two overlapping ones read as depth.
+    float warmField = fbmSky(d * 2.3 + 11.0);
+    float coolField = fbmSky(d * 1.7 - 27.0);
+
+    // Thresholded hard — nebulae are mostly empty sky with a few dense regions,
+    // and a soft threshold gives you uniform haze instead.
+    float warm = smoothstep(0.52, 0.86, warmField);
+    float cool = smoothstep(0.48, 0.88, coolField);
+
+    // A broad band of denser dust, like looking along a galactic plane. Gives
+    // the sky an orientation, which stops it reading as random.
+    float plane = exp(-pow((d.y + 0.18) * 2.6, 2.0));
+
+    vec3 rgb = uSpace;
+    rgb += uCool * cool * 0.55 * (0.35 + 0.65 * plane);
+    rgb += uWarm * warm * 0.42 * (0.25 + 0.75 * plane);
+    // Where both fields are dense, a brighter core.
+    rgb += uCore * warm * cool * 0.85;
+
+    gl_FragColor = vec4(rgb, 1.0);
+  }
+`;
+
+/**
+ * Nebula backdrop.
+ *
+ * A plain starfield on flat black reads as a screensaver. Two thresholded noise
+ * fields plus a galactic-plane band give the sky depth and orientation, and the
+ * planet suddenly looks like it is somewhere rather than floating on a colour.
+ *
+ * Rendered as an inside-out box locked to the camera with `gl_Position.xyww`,
+ * so it always sits exactly on the far plane at zero depth-sorting cost.
+ */
+export function Nebula() {
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        uniforms: {
+          uSpace: { value: new THREE.Color(...SPACE) },
+          uWarm: { value: new THREE.Color(...NEBULA.warm) },
+          uCool: { value: new THREE.Color(...NEBULA.cool) },
+          uCore: { value: new THREE.Color(...NEBULA.core) },
+        },
+        vertexShader: SKY_VERT,
+        fragmentShader: SKY_FRAG,
+        side: THREE.BackSide,
+        depthWrite: false,
+        depthTest: false,
+      }),
+    [],
+  );
+
+  useEffect(() => () => material.dispose(), [material]);
+
+  return (
+    <mesh material={material} raycast={() => null} frustumCulled={false} renderOrder={-1}>
+      <boxGeometry args={[2, 2, 2]} />
+    </mesh>
+  );
+}
+
 // ---------------------------------------------------------------- starfield
 
 const STAR_VERT = /* glsl */ `
   attribute float aMag;
+  attribute vec3 aTint;
   varying float vMag;
+  varying vec3 vTint;
   void main() {
     vMag = aMag;
-    gl_PointSize = aMag * 2.1;
+    vTint = aTint;
+    gl_PointSize = aMag * 2.4;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -30,18 +147,21 @@ const STAR_VERT = /* glsl */ `
 const STAR_FRAG = /* glsl */ `
   precision mediump float;
   varying float vMag;
+  varying vec3 vTint;
   void main() {
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
     float r = dot(uv, uv);
     if (r > 1.0) discard;
-    gl_FragColor = vec4(vec3(0.70, 0.76, 0.92), (1.0 - r) * vMag * 0.20);
+    float core = 1.0 - r;
+    gl_FragColor = vec4(vTint, core * core * vMag * 0.55);
   }
 `;
 
-export function Starfield({ count = 2200, radius = 60 }: { count?: number; radius?: number }) {
+export function Starfield({ count = 3600, radius = 60 }: { count?: number; radius?: number }) {
   const { geometry, material } = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const mag = new Float32Array(count);
+    const tint = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const z = 2 * Math.random() - 1;
       const t = Math.random() * Math.PI * 2;
@@ -49,11 +169,24 @@ export function Starfield({ count = 2200, radius = 60 }: { count?: number; radiu
       pos[i * 3] = r * Math.cos(t) * radius;
       pos[i * 3 + 1] = z * radius;
       pos[i * 3 + 2] = r * Math.sin(t) * radius;
-      mag[i] = 0.28 + Math.pow(Math.random(), 3.2) * 1.25;
+      mag[i] = 0.25 + Math.pow(Math.random(), 3.4) * 1.5;
+
+      // Real starfields are not white. A spread from cool blue-white through
+      // to amber is the difference between "stars" and "dust on the lens".
+      const k = Math.random();
+      const c =
+        k < 0.62 ? [0.78, 0.84, 1.0] :
+        k < 0.86 ? [1.0, 0.98, 0.92] :
+        k < 0.96 ? [1.0, 0.86, 0.68] :
+                   [1.0, 0.72, 0.62];
+      tint[i * 3] = c[0];
+      tint[i * 3 + 1] = c[1];
+      tint[i * 3 + 2] = c[2];
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('aMag', new THREE.Float32BufferAttribute(mag, 1));
+    geo.setAttribute('aTint', new THREE.Float32BufferAttribute(tint, 3));
     return {
       geometry: geo,
       material: new THREE.ShaderMaterial({
@@ -127,11 +260,11 @@ const PLANET_FRAG = /* glsl */ `
 
     vec3 rgb = albedo * (uNightFloor + (1.0 - uNightFloor) * day);
 
-    // Cities burn only on the unlit side, brightest deep into the dark where
-    // nothing competes with them. This is the single strongest cue in the
-    // reference image that the planet is inhabited.
+    // Aurora and storm glow burn only on the unlit side, brightest deep into
+    // the dark where nothing competes. Without this the night limb is a dead
+    // black crescent and the planet looks bitten into.
     float night = 1.0 - day;
-    rgb += uCityLight * cityLights * night * night * 1.35;
+    rgb += uCityLight * cityLights * night * night * 1.15;
 
     // A warm sliver exactly at the terminator, plus a hint of scatter bleeding
     // onto the dark side of the boundary.
@@ -165,13 +298,15 @@ export function Planet({ radius, surface }: { radius: number; surface: THREE.Tex
           uHasSurface: { value: 0 },
           uSunDir: { value: SUN_DIR.clone() },
           uCityLight: { value: new THREE.Color(...CITY_LIGHT) },
-          uFallback: { value: new THREE.Color(...PLANET_SURFACE.deepOcean) },
+          uFallback: { value: new THREE.Color(...PLANET_SURFACE.mid) },
           uGraticule: { value: new THREE.Color(0.24, 0.44, 0.62) },
-          uGraticuleGain: { value: 0.42 },
+          uGraticuleGain: { value: 0.16 },
           // Never fully black: an unlit hemisphere with zero albedo loses its
           // silhouette against space and the globe looks bitten into.
           uNightFloor: { value: 0.10 },
-          uTerminator: { value: 0.30 },
+          // A gas giant's atmosphere is deep, so its terminator is soft. A hard
+          // edge is the tell that you are looking at a lit sphere, not a world.
+          uTerminator: { value: 0.42 },
         },
         vertexShader: PLANET_VERT,
         fragmentShader: PLANET_FRAG,

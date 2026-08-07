@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 
-import { Atmosphere, Planet, Starfield } from './Backdrop';
+import { Atmosphere, Nebula, Planet, Starfield } from './Backdrop';
 import { usePlanetTexture } from './usePlanetTexture';
 import { PointCloud, type PointCloudHandle } from './PointCloud';
 import { ArcLayer, ArcPool, AMBIENT_STYLE, FOCUS_STYLE, type ArcEndpoints } from './ArcLayer';
@@ -289,6 +289,7 @@ export function Scene() {
   return (
     <>
       {/* STATIC — never changes */}
+      <Nebula />
       <Starfield />
       <Planet radius={GLOBE_RADIUS} surface={surface} />
       <Atmosphere radius={GLOBE_RADIUS} />

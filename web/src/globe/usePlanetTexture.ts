@@ -7,7 +7,7 @@ import { PLANET_SURFACE, DOMAIN_TERRAIN_TINT } from './palette';
 import type { TileManifest } from '../tile/loader';
 
 /** Equirectangular bake size by device tier. 2:1 aspect is mandatory. */
-const SIZE_BY_TIER = { low: 1024, mid: 1536, high: 2048 } as const;
+const SIZE_BY_TIER = { low: 1024, mid: 2048, high: 4096 } as const;
 
 /**
  * Bakes the planet surface into a texture, once.
@@ -43,6 +43,9 @@ export function usePlanetTexture(manifest: TileManifest | null, tier: keyof type
     // must blend into the first.
     target.texture.wrapS = THREE.RepeatWrapping;
     target.texture.wrapT = THREE.ClampToEdgeWrapping;
+    // Anisotropic filtering prevents the texture from blurring at the edges
+    // of the sphere where it is viewed at a steep angle.
+    target.texture.anisotropy = gl.capabilities.getMaxAnisotropy();
     // Linear, NOT sRGB. Every shader in this project is a raw ShaderMaterial
     // with no `colorspace_fragment` include, so nothing ever encodes to sRGB on
     // write. Tagging the target sRGB would make three decode on read without a
@@ -61,16 +64,15 @@ export function usePlanetTexture(manifest: TileManifest | null, tier: keyof type
       uniforms: {
         uClusters: { value: clusters },
         uDomainTint: { value: DOMAIN_TERRAIN_TINT.map((c) => new THREE.Color(...c)) },
-        uSeaLevel: { value: 0.0 },
-        // Derived from the world seed so the map is reproducible: the same
-        // world always grows the same continents.
+        // Derived from the world seed, so the same world always grows the same
+        // weather. A planet that reshuffles on reload has no sense of place.
         uSeed: { value: (manifest.seed % 97) * 0.37 },
-        uDeepOcean: { value: new THREE.Color(...PLANET_SURFACE.deepOcean) },
-        uShelf: { value: new THREE.Color(...PLANET_SURFACE.shelf) },
-        uCoast: { value: new THREE.Color(...PLANET_SURFACE.coast) },
-        uLowland: { value: new THREE.Color(...PLANET_SURFACE.lowland) },
-        uHighland: { value: new THREE.Color(...PLANET_SURFACE.highland) },
-        uIce: { value: new THREE.Color(...PLANET_SURFACE.ice) },
+        uDeep: { value: new THREE.Color(...PLANET_SURFACE.deep) },
+        uMid: { value: new THREE.Color(...PLANET_SURFACE.mid) },
+        uLight: { value: new THREE.Color(...PLANET_SURFACE.light) },
+        uPale: { value: new THREE.Color(...PLANET_SURFACE.pale) },
+        uCirrus: { value: new THREE.Color(...PLANET_SURFACE.cirrus) },
+        uStorm: { value: new THREE.Color(...PLANET_SURFACE.storm) },
       },
       vertexShader: BAKE_VERT,
       fragmentShader: BAKE_FRAG,

@@ -196,9 +196,9 @@ export class ArcPool {
 }
 
 export const AMBIENT_STYLE: ArcStyle = {
-  color: new THREE.Color(0.10, 0.44, 0.62),
-  pulseColor: new THREE.Color(0.30, 0.92, 1.0),
-  focusColor: new THREE.Color(0.62, 1.0, 0.86),
+  color: new THREE.Color(0.85, 0.45, 0.15), // warm copper
+  pulseColor: new THREE.Color(1.0, 0.85, 0.3), // gold pulse
+  focusColor: new THREE.Color(1.0, 0.4, 0.4), // fiery red
   baseAlpha: 0.052,
   pulseGain: 0.36,
   pulseSpeed: 0.09,
@@ -210,9 +210,9 @@ export const AMBIENT_STYLE: ArcStyle = {
 };
 
 export const FOCUS_STYLE: ArcStyle = {
-  color: new THREE.Color(0.18, 0.86, 1.0),
-  pulseColor: new THREE.Color(1.0, 1.0, 1.0),
-  focusColor: new THREE.Color(0.55, 1.0, 0.80),
+  color: new THREE.Color(1.0, 0.65, 0.2), // bright orange
+  pulseColor: new THREE.Color(1.0, 1.0, 0.9), // almost white hot
+  focusColor: new THREE.Color(1.0, 0.3, 0.3), // intense red
   baseAlpha: 0.34,
   pulseGain: 0.95,
   pulseSpeed: 0.34,

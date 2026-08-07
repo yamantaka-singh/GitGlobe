@@ -18,6 +18,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { SUN_VEC } from '../src/globe/sun.ts';
+import {
+  PLANET_SURFACE as SURFACE,
+  DOMAIN_TERRAIN_TINT as TINT,
+  CITY_LIGHT,
+  ATMOSPHERE,
+  SPACE,
+  NEBULA,
+} from '../src/globe/palette.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TILES = resolve(HERE, '../public/tiles');
@@ -26,15 +34,6 @@ const OUT_GLOBE = resolve(HERE, '../public/planet-globe.png');
 
 const WIDTH = 1024;
 const HEIGHT = 512;
-const SEA_LEVEL = 0.0;
-
-const argNum = (name: string, fallback: number) => {
-  const i = process.argv.indexOf(`--${name}`);
-  return i >= 0 && process.argv[i + 1] ? Number(process.argv[i + 1]) : fallback;
-};
-const K = argNum('k', 36);
-const AMP = argNum('amp', 0.62);
-const OFFSET = argNum('offset', 0.68);
 
 // ---------------------------------------------------------------- noise
 
@@ -153,27 +152,12 @@ function writePng(path: string, width: number, height: number, rgb: Uint8Array) 
 
 // ---------------------------------------------------------------- main
 
-const SURFACE = {
-  deepOcean: [0.024, 0.055, 0.118],
-  shelf: [0.055, 0.145, 0.262],
-  coast: [0.118, 0.235, 0.29],
-  lowland: [0.196, 0.235, 0.18],
-  highland: [0.478, 0.416, 0.298],
-  ice: [0.784, 0.839, 0.886],
-};
-
-const TINT = [
-  [0.106, 0.267, 0.353], [0.353, 0.243, 0.145], [0.145, 0.322, 0.259], [0.337, 0.302, 0.176],
-  [0.235, 0.216, 0.361], [0.196, 0.318, 0.365], [0.098, 0.263, 0.278], [0.361, 0.196, 0.196],
-  [0.294, 0.184, 0.341], [0.169, 0.224, 0.322], [0.267, 0.322, 0.18], [0.243, 0.259, 0.29],
-];
-
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smoothstep = (e0: number, e1: number, x: number) => {
   const t = clamp01((x - e0) / (e1 - e0 || 1e-9));
   return t * t * (3 - 2 * t);
 };
-const mix3 = (a: number[], b: number[], t: number) => [
+const mix3 = (a: readonly number[], b: readonly number[], t: number): number[] => [
   lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t),
 ];
 
@@ -205,58 +189,66 @@ function main() {
       const dy = Math.cos(theta);
       const dz = Math.sin(phi) * st;
 
+      const shear = (1 - dy * dy) * 1.35 - 0.55;
+      const sphi = phi + shear;
+      const fx = -Math.cos(sphi) * st;
+      const fy = dy;
+      const fz = Math.sin(sphi) * st;
+
       let potential = 0;
       let nearest = -2;
       let domain = 0;
       for (const c of clusters) {
         const d = dx * c.x + dy * c.y + dz * c.z;
-        potential += Math.exp(-K * (1 - d));
+        potential += Math.exp(-30 * (1 - d));
         if (d > nearest) {
           nearest = d;
           domain = c.d;
         }
       }
 
-      const qx = dx * 1.9 + seed;
-      const qy = dy * 1.9 + seed;
-      const qz = dz * 1.9 + seed;
-      const wx = fbm(qx + 13.7, qy + 13.7, qz + 13.7, 3) * 0.62;
-      const wy = fbm(qx + 41.3, qy + 41.3, qz + 41.3, 3) * 0.62;
-      const wz = fbm(qx + 77.1, qy + 77.1, qz + 77.1, 3) * 0.62;
-      const detail = fbm(dx * 2.7 + wx + seed, dy * 2.7 + wy + seed, dz * 2.7 + wz + seed, 5);
-      const ridge = 1 - Math.abs(fbm(dx * 5.1 + seed * 0.7, dy * 5.1 + seed * 0.7, dz * 5.1 + seed * 0.7, 3));
+      const turb =
+        fbm(fx * 2.1 + seed, fy * 2.1 + seed, fz * 2.1 + seed, 5) * 0.3 +
+        fbm(fx * 5.4 + seed * 1.7, fy * 5.4 + seed * 1.7, fz * 5.4 + seed * 1.7, 3) * 0.1;
+      const band = Math.sin((dy * 6.5 + turb * 2.4) * Math.PI);
 
-      const h = potential * AMP + detail * 0.78 + ridge * 0.12 - OFFSET;
+      const zone = smoothstep(-0.1, 0.85, band);
+      const deepBelt = smoothstep(0.35, -0.75, band);
+      let col = mix3(SURFACE.mid, SURFACE.light, zone);
+      col = mix3(col, SURFACE.deep, deepBelt * 0.85);
+      col = mix3(col, SURFACE.pale, smoothstep(0.8, 0.99, band) * 0.55);
 
-      const shelf = smoothstep(SEA_LEVEL - 0.3, SEA_LEVEL, h);
-      const ocean = mix3(SURFACE.deepOcean, SURFACE.shelf, shelf * shelf);
-
-      const e = smoothstep(SEA_LEVEL, SEA_LEVEL + 0.46, h);
-      let terrain = mix3(SURFACE.coast, SURFACE.lowland, smoothstep(0, 0.22, e));
-      terrain = mix3(terrain, SURFACE.highland, smoothstep(0.34, 0.92, e));
       const tint = TINT[domain % 12];
-      terrain = mix3(terrain, [
-        terrain[0] * 0.62 + tint[0] * 0.38,
-        terrain[1] * 0.62 + tint[1] * 0.38,
-        terrain[2] * 0.62 + tint[2] * 0.38,
-      ], 0.55);
+      const territory = smoothstep(0.18, 1.3, potential);
+      col = mix3(col, [
+        col[0] * 0.45 + tint[0] * 0.55,
+        col[1] * 0.45 + tint[1] * 0.55,
+        col[2] * 0.45 + tint[2] * 0.55,
+      ], territory * 0.62);
 
-      const land = smoothstep(SEA_LEVEL - 0.008, SEA_LEVEL + 0.008, h);
-      let col = mix3(ocean, terrain, land);
+      const stormMask = smoothstep(0.85, 1.9, potential);
+      const swirl = fbm(fx * 7.5 + seed * 2.3, fy * 7.5 + seed * 2.3, fz * 7.5 + seed * 2.3, 3);
+      const storm = stormMask * smoothstep(-0.25, 0.35, swirl);
+      col = mix3(col, SURFACE.storm, storm * 0.8);
+      const companion = stormMask * smoothstep(0.3, 0.62, swirl) * (1 - storm);
+      col = mix3(col, SURFACE.cirrus, companion * 0.55);
 
-      const coastline = 1 - smoothstep(0, 0.013, Math.abs(h - SEA_LEVEL));
-      const glow = [tint[0] * 0.5 + 0.16, tint[1] * 0.5 + 0.3, tint[2] * 0.5 + 0.36];
-      col = [col[0] + glow[0] * coastline * 0.75, col[1] + glow[1] * coastline * 0.75, col[2] + glow[2] * coastline * 0.75];
+      const cp = [fx * 3.4 + seed, dy * 26 + seed, fz * 3.4 + seed];
+      let cirrus = fbm(cp[0], cp[1], cp[2], 3) + fbm(cp[0] * 2.7, cp[1] * 2.7, cp[2] * 2.7, 3) * 0.4;
+      cirrus = smoothstep(0.14, 0.46, cirrus);
+      cirrus *= smoothstep(0.02, 0.35, Math.abs(dy)) * smoothstep(0.97, 0.72, Math.abs(dy));
+      col = mix3(col, SURFACE.cirrus, cirrus * 0.55);
 
-      const ice = smoothstep(0.9, 0.988, Math.abs(dy) + detail * 0.05);
-      col = mix3(col, SURFACE.ice, ice * lerp(0.55, 1, land));
+      const hood = smoothstep(0.72, 0.99, Math.abs(dy) + turb * 0.1);
+      col = mix3(col, mix3(SURFACE.pale, SURFACE.cirrus, 0.35), hood * 0.55);
 
-      const coastal = 1 - smoothstep(0, 0.17, h - SEA_LEVEL);
-      const conurbation = smoothstep(0.32, 1.15, potential);
-      const fine = fbm(dx * 78 + seed, dy * 78 + seed, dz * 78 + seed, 3);
-      const lights = clamp01(
-        conurbation * land * (1 - ice) * (0.3 + 0.7 * coastal) * smoothstep(0.06, 0.3, fine),
-      );
+      const aurora =
+        smoothstep(0.86, 0.995, Math.abs(dy)) *
+        (0.35 + 0.65 * fbm(fx * 9 + seed, fy * 9 + seed, fz * 9 + seed, 3));
+      const lights = clamp01(aurora * 0.95 + storm * 0.12);
+
+      const land = territory;       // reported as territory coverage
+      const ice = storm;            // reported as storm coverage
 
       const w = Math.sin(theta); // equirectangular rows are not equal area
       areaTotal += w;
@@ -283,19 +275,47 @@ function main() {
   renderGlobe(albedoMap, lightMap);
 
   // Weighted by sin(theta): equirectangular rows near the poles cover far less
-  // sphere than rows near the equator, and an unweighted count makes the ice
-  // caps look about three times bigger than they are.
+  // sphere than rows near the equator, and an unweighted count is badly wrong.
   const total = areaTotal;
-  console.log(`Planet preview → ${OUT}   (k=${K} amp=${AMP} offset=${OFFSET})`);
-  console.log(`Globe render   → ${OUT_GLOBE}`);
-  console.log(`  land       ${((landCount / total) * 100).toFixed(1)}%   (target 25-45%, by true area)`);
-  console.log(`  ice        ${((iceCount / total) * 100).toFixed(1)}%   (target < 12%)`);
-  console.log(`  city light ${((lightSum / total) * 100).toFixed(1)}% mean intensity`);
-  console.log(`  territories ${domainArea.size} of 12 domains have land`);
 
-  const landFrac = landCount / total;
-  const ok = landFrac > 0.18 && landFrac < 0.55 && domainArea.size >= 10 && iceCount / total < 0.14;
-  console.log(ok ? '\n  Looks like a planet.' : '\n  OUT OF RANGE — tune uSeaLevel or the potential weight.');
+  // Mean luminance, and band contrast measured ACROSS latitude specifically.
+  // Global variance would pass on a planet that was uniformly noisy; banding
+  // means the row means themselves have to vary.
+  let lumSum = 0;
+  const rowMean: number[] = [];
+  for (let py = 0; py < HEIGHT; py++) {
+    let row = 0;
+    for (let px = 0; px < WIDTH; px++) {
+      const o = (py * WIDTH + px) * 3;
+      const l = 0.2126 * albedoMap[o] + 0.7152 * albedoMap[o + 1] + 0.0722 * albedoMap[o + 2];
+      row += l;
+      lumSum += l * Math.sin((py / (HEIGHT - 1)) * Math.PI);
+    }
+    rowMean.push(row / WIDTH);
+  }
+  const meanLum = lumSum / total;
+  const rmAvg = rowMean.reduce((a, b) => a + b, 0) / rowMean.length;
+  const bandContrast = Math.sqrt(rowMean.reduce((a, b) => a + (b - rmAvg) ** 2, 0) / rowMean.length);
+
+  console.log(`Planet preview → ${OUT}`);
+  console.log(`Globe render   → ${OUT_GLOBE}`);
+  console.log(`  territory   ${((landCount / total) * 100).toFixed(1)}%   (target 20-85%)`);
+  console.log(`  storms      ${((iceCount / total) * 100).toFixed(1)}%   (target 0.5-15%)`);
+  console.log(`  night glow  ${((lightSum / total) * 100).toFixed(1)}%   (target < 12%, or the dark side is a lamp)`);
+  console.log(`  mean lum    ${meanLum.toFixed(3)}      (target < 0.55, nodes must stay brightest)`);
+  console.log(`  band contrast ${bandContrast.toFixed(3)}  (target > 0.02, proves banding exists)`);
+  console.log(`  domains     ${domainArea.size} of 12 have territory`);
+
+  const t = landCount / total;
+  const st = iceCount / total;
+  const ok =
+    t > 0.2 && t < 0.85 &&
+    st > 0.005 && st < 0.15 &&
+    lightSum / total < 0.12 &&
+    meanLum < 0.55 &&
+    bandContrast > 0.02 &&
+    domainArea.size >= 10;
+  console.log(ok ? '\n  Looks like an ice giant.' : '\n  OUT OF RANGE — see the targets above.');
   process.exit(ok ? 0 : 1);
 }
 
@@ -311,9 +331,8 @@ function renderGlobe(albedo: Float32Array, lights: Float32Array) {
   // The same constant the app uses — imported, not copied.
   const sl = Math.hypot(...SUN_VEC);
   const sun = SUN_VEC.map((v) => v / sl);
-  const CITY = [1.0, 0.612, 0.278];
-  const RIM = [0.431, 0.545, 0.91];
-  const SPACE = [0.008, 0.008, 0.016];
+  const CITY = CITY_LIGHT;
+  const RIM = ATMOSPHERE.rim;
 
   const sample = (dx: number, dy: number, dz: number) => {
     // Inverse of the bake mapping.
@@ -335,7 +354,20 @@ function renderGlobe(albedo: Float32Array, lights: Float32Array) {
       const ny = 1 - (y / S) * 2;
       const r2 = nx * nx + ny * ny;
       const o = (y * S + x) * 3;
-      let col = [...SPACE];
+      // Background: the same two-field nebula the sky shader draws, so the
+      // preview shows the actual composition rather than the planet on black.
+      const bx = nx * 2.3;
+      const by = ny * 2.3;
+      const warmField = fbm(bx + 11, by + 11, 11, 5) + 0.5;
+      const coolField = fbm(bx * 0.74 - 27, by * 0.74 - 27, -27, 5) + 0.5;
+      const warm = smoothstep(0.52, 0.86, warmField);
+      const cool = smoothstep(0.48, 0.88, coolField);
+      const plane = Math.exp(-Math.pow((ny + 0.18) * 2.6, 2));
+      let col: number[] = [
+        SPACE[0] + NEBULA.cool[0] * cool * 0.55 * (0.35 + 0.65 * plane) + NEBULA.warm[0] * warm * 0.42 * (0.25 + 0.75 * plane) + NEBULA.core[0] * warm * cool * 0.85,
+        SPACE[1] + NEBULA.cool[1] * cool * 0.55 * (0.35 + 0.65 * plane) + NEBULA.warm[1] * warm * 0.42 * (0.25 + 0.75 * plane) + NEBULA.core[1] * warm * cool * 0.85,
+        SPACE[2] + NEBULA.cool[2] * cool * 0.55 * (0.35 + 0.65 * plane) + NEBULA.warm[2] * warm * 0.42 * (0.25 + 0.75 * plane) + NEBULA.core[2] * warm * cool * 0.85,
+      ];
 
       if (r2 <= 1.0) {
         const nz = Math.sqrt(1 - r2);
@@ -344,7 +376,7 @@ function renderGlobe(albedo: Float32Array, lights: Float32Array) {
         const dz2 = -ny * Math.sin(tilt) + nz * Math.cos(tilt);
         const { c, l } = sample(nx, dy2, dz2);
         const s = nx * sun[0] + dy2 * sun[1] + dz2 * sun[2];
-        const day = smoothstep(-0.3, 0.3, s);
+        const day = smoothstep(-0.42, 0.42, s);
         const night = 1 - day;
         col = [
           c[0] * (0.1 + 0.9 * day) + CITY[0] * l * night * night * 1.35,
@@ -354,10 +386,14 @@ function renderGlobe(albedo: Float32Array, lights: Float32Array) {
         const fres = Math.pow(1 - nz, 6.5) * 0.78 * lerp(1, smoothstep(-0.45, 0.9, s), 0.62);
         col = [col[0] + RIM[0] * fres, col[1] + RIM[1] * fres, col[2] + RIM[2] * fres];
       } else if (r2 < 1.44) {
-        // Outer scatter halo.
+        // Outer scatter halo, additive over whatever nebula is behind it.
         const d = Math.sqrt(r2);
         const a = Math.pow(Math.max(0, 1 - (d - 1) / 0.2), 3) * 0.5;
-        col = [SPACE[0] + 0.478 * a * 0.4, SPACE[1] + 0.4 * a * 0.4, SPACE[2] + 0.788 * a * 0.4];
+        col = [
+          col[0] + ATMOSPHERE.scatter[0] * a * 0.5,
+          col[1] + ATMOSPHERE.scatter[1] * a * 0.5,
+          col[2] + ATMOSPHERE.scatter[2] * a * 0.5,
+        ];
       }
 
       out[o] = Math.round(clamp01(col[0]) * 255);
