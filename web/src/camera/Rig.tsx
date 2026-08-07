@@ -156,8 +156,8 @@ export function Rig({ radius }: { radius: number }) {
     const { autoRotate, cameraBusy, reducedMotion, hoveredId, selectedId } = useGlobeStore.getState();
     if (!autoRotate || cameraBusy || reducedMotion || hoveredId >= 0 || selectedId >= 0) return;
 
-    // Halved rotation speed from the original 0.0225
-    ref.current?.rotate(delta * 0.01125, 0, false);
+    // Decreased rotation speed as requested
+    ref.current?.rotate(delta * 0.0035, 0, false);
   });
 
   return <CameraControls ref={ref} makeDefault />;
