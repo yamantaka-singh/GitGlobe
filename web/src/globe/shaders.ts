@@ -247,16 +247,16 @@ export const PICK_FRAG = /* glsl */ `
  * simulator before Phase 3 ships, per web3d-interaction-ux.
  */
 export const DOMAIN_PALETTE: readonly (readonly [number, number, number])[] = [
-  [0.26, 0.78, 1.00], // AI / ML — signal cyan
-  [1.00, 0.62, 0.24], // Web frameworks — amber (warm accent)
-  [0.36, 0.95, 0.72], // Databases — mint
-  [0.94, 0.82, 0.42], // DevOps — pale gold (warm accent)
-  [0.62, 0.58, 1.00], // Languages — periwinkle
-  [0.58, 0.92, 1.00], // Systems — ice
-  [0.20, 0.72, 0.80], // Data engineering — deep teal
-  [1.00, 0.42, 0.42], // Security — alert red (warm accent)
-  [0.82, 0.48, 1.00], // Graphics — orchid
-  [0.42, 0.60, 0.92], // Mobile — steel blue
-  [0.70, 0.94, 0.46], // Scraping — chartreuse
-  [0.64, 0.72, 0.84], // Scientific — cool grey
+  [1.00, 0.85, 0.30], // AI / ML — bright gold
+  [1.00, 0.45, 0.15], // Web frameworks — vivid orange
+  [0.95, 1.00, 0.40], // Databases — neon yellow
+  [1.00, 0.25, 0.55], // DevOps — hot pink
+  [0.65, 1.00, 0.30], // Languages — electric lime
+  [1.00, 0.65, 0.20], // Systems — tangerine
+  [1.00, 0.35, 0.35], // Data engineering — coral red
+  [0.85, 0.15, 0.15], // Security — crimson
+  [0.85, 0.40, 1.00], // Graphics — bright magenta
+  [1.00, 0.75, 0.55], // Mobile — peach
+  [1.00, 0.95, 0.65], // Scraping — pale lemon
+  [1.00, 0.55, 0.85], // Scientific — flamingo pink
 ];
