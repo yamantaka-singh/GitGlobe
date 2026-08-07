@@ -19,6 +19,11 @@ const _eye = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
+/** How long the globe stays still after you touch it. */
+const IDLE_BEFORE_ROTATE_MS = 4000;
+/** Slow. The drift should be barely perceptible, not a carousel. */
+const IDLE_ROTATE_RAD_PER_SEC = 0.018;
+
 export interface FlyToOptions {
   /** Extra padding on the framing, as a multiple of globe radius. */
   padding?: number;
@@ -114,6 +119,7 @@ export const globeCamera = new GlobeCamera();
 export function Rig({ radius }: { radius: number }) {
   const ref = useRef<CameraControlsImpl>(null);
   const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
 
   useEffect(() => {
     globeCamera.radius = radius;
@@ -151,10 +157,32 @@ export function Rig({ radius }: { radius: number }) {
     };
   }, [radius, invalidate]);
 
+  // Any pointer activity over the canvas counts as intent, including plain
+  // movement. Gating on hover alone is not enough: the node you are reaching
+  // for slides away *before* you get to it, so aiming becomes a chase.
+  const lastInteraction = useRef(0);
+  useEffect(() => {
+    const el = gl.domElement;
+    const touch = () => {
+      lastInteraction.current = performance.now();
+    };
+    const events = ['pointerdown', 'pointermove', 'wheel', 'touchstart'] as const;
+    for (const ev of events) el.addEventListener(ev, touch, { passive: true });
+    return () => {
+      for (const ev of events) el.removeEventListener(ev, touch);
+    };
+  }, [gl]);
+
   useFrame((_, delta) => {
     const { autoRotate, cameraBusy, reducedMotion, hoveredId, selectedId } = useGlobeStore.getState();
     if (!autoRotate || cameraBusy || reducedMotion || hoveredId >= 0 || selectedId >= 0) return;
-    ref.current?.rotate(delta * 0.0225, 0, false);
+
+    const idle = performance.now() - lastInteraction.current - IDLE_BEFORE_ROTATE_MS;
+    if (idle < 0) return;
+
+    // Ease back in over a second rather than snapping to speed — an abrupt
+    // resume is its own kind of jarring.
+    ref.current?.rotate(delta * IDLE_ROTATE_RAD_PER_SEC * Math.min(1, idle / 1000), 0, false);
   });
 
   return <CameraControls ref={ref} makeDefault />;

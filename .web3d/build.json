@@ -42,18 +42,18 @@
     }
   },
   "artDirection": {
-    "mood": "photographic planet on black — naturalistic surface, bright data",
-    "background": "#020204",
-    "accent": "#6E8BE8",
-    "secondary": "#7A66C9",
-    "warning": "#FF9C47",
+    "mood": "ice giant in a nebula — deep, banded, quiet",
+    "background": "#010104",
+    "accent": "#4D8CF8",
+    "secondary": "#6659D8",
+    "warning": "#73DAFF",
     "motion": [
       "deliberate",
       "weightless",
       "measured"
     ],
-    "reference": "populous.com/explore — Earth on pure black, periwinkle-to-violet rim, amber night-side city lights, white diamond markers",
-    "notes": "No cyan. The reference has no neon at all: a muted photographic body, a violet halo, and markers that are the only pure-white things on screen. That hierarchy is what keeps 100k data points readable over terrain.",
+    "reference": "Neptune (Voyager 2) for the body; populous.com/explore for the chrome and the black-space discipline",
+    "notes": "Neptune's look is LOW band contrast, methane cirrus above the bands, and a few dark storm ovals. Crank the contrast and it becomes a beach ball. Everything stays under 0.55 luminance so 100k nodes remain the brightest things on screen.",
     "explicitlyNotDoing": [
       "bloom post-processing",
       "scanlines",
@@ -154,6 +154,21 @@
       "id": "phase07-cpu-preview",
       "decision": "scripts/preview-planet.ts renders the same formula in Node and fails on bad land fraction",
       "why": "The first shader produced 100% land. Without a headless render nobody finds that until they open a browser."
+    },
+    {
+      "id": "phase08-ice-giant",
+      "decision": "Gas giant instead of a terrestrial planet; territories are weather systems, not continents",
+      "why": "Latitudinal banding plus differential-rotation shear is far more beautiful than coastlines, and territory tint inside the bands keeps sectors legible without the planet becoming a paint chart."
+    },
+    {
+      "id": "phase08-idle-rotation",
+      "decision": "Auto-rotation pauses on ANY pointer activity, not just hover, and resumes after 4s with a 1s ramp",
+      "why": "Gating on hover alone still let the target slide away while you were reaching for it. Aiming at a node had become a chase."
+    },
+    {
+      "id": "phase08-nebula-sky",
+      "decision": "Two thresholded noise fields plus a galactic-plane band, drawn on a camera-locked box at gl_Position.xyww",
+      "why": "A starfield on flat black reads as a screensaver. Depth and orientation in the sky make the planet look like it is somewhere."
     }
   ]
 }

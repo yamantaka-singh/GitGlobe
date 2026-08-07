@@ -61,16 +61,15 @@ export function usePlanetTexture(manifest: TileManifest | null, tier: keyof type
       uniforms: {
         uClusters: { value: clusters },
         uDomainTint: { value: DOMAIN_TERRAIN_TINT.map((c) => new THREE.Color(...c)) },
-        uSeaLevel: { value: 0.0 },
-        // Derived from the world seed so the map is reproducible: the same
-        // world always grows the same continents.
+        // Derived from the world seed, so the same world always grows the same
+        // weather. A planet that reshuffles on reload has no sense of place.
         uSeed: { value: (manifest.seed % 97) * 0.37 },
-        uDeepOcean: { value: new THREE.Color(...PLANET_SURFACE.deepOcean) },
-        uShelf: { value: new THREE.Color(...PLANET_SURFACE.shelf) },
-        uCoast: { value: new THREE.Color(...PLANET_SURFACE.coast) },
-        uLowland: { value: new THREE.Color(...PLANET_SURFACE.lowland) },
-        uHighland: { value: new THREE.Color(...PLANET_SURFACE.highland) },
-        uIce: { value: new THREE.Color(...PLANET_SURFACE.ice) },
+        uDeep: { value: new THREE.Color(...PLANET_SURFACE.deep) },
+        uMid: { value: new THREE.Color(...PLANET_SURFACE.mid) },
+        uLight: { value: new THREE.Color(...PLANET_SURFACE.light) },
+        uPale: { value: new THREE.Color(...PLANET_SURFACE.pale) },
+        uCirrus: { value: new THREE.Color(...PLANET_SURFACE.cirrus) },
+        uStorm: { value: new THREE.Color(...PLANET_SURFACE.storm) },
       },
       vertexShader: BAKE_VERT,
       fragmentShader: BAKE_FRAG,

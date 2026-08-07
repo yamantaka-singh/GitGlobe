@@ -111,6 +111,7 @@ Test on a laptop integrated GPU, not just a discrete one.
 scripts/
   gen-world.ts      positions → graph → PageRank → tiles + graph.bin
   verify-world.ts   30 integrity checks over both artifacts
+  preview-planet.ts CPU render of the planet shader, with pass/fail gates
 src/
   tile/format.ts    12 bytes per node — docs/ARCHITECTURE.md §2.6
   graph/
@@ -121,7 +122,9 @@ src/
     arcShaders.ts   slerped ribbon arcs with a travelling pulse
     ArcLayer.tsx    fixed-capacity GPU-resident arc pool
     PointCloud.tsx  one THREE.Points per LOD band
-    Backdrop.tsx    starfield, gridded core, rim + scatter shells, equator ring
+    Backdrop.tsx    nebula sky, tinted starfield, ice giant, 3 atmosphere shells
+    planetShaders.ts  banded ice-giant surface, baked once to a texture
+    palette.ts      every colour in one place, shared with the Node preview
     usePicking.ts   1×1 scissored GPU pick pass, layer-isolated, 30Hz
     useAnchor.ts    projects the hovered node to screen space for the reticle
   camera/Rig.tsx    the single owner of the camera
@@ -131,42 +134,55 @@ src/
 
 ---
 
-## The planet surface
+## The planet
 
-The globe is a **map**, not Earth. Geography is derived from the semantic
-layout: continents form where repository clusters are dense, so the AI/ML
-landmass exists *because* AI/ML repositories are there. Sectors are territories.
+An **ice giant**, not a terrestrial world. Neptune's character comes from
+latitudinal banding, methane cirrus riding above it, a few dark storm ovals —
+and critically from *low* contrast between the bands. Crank the contrast and you
+get a beach ball.
 
-Generated once into a 2048×1024 equirectangular texture at load — terrain noise
-plus a loop over every cluster centre is far too expensive per-frame, but as a
-one-time bake it costs ~40ms and the sphere afterwards is a single texture
-fetch. RGB carries daylight albedo; alpha carries city-light intensity for the
-night side.
+Geography still means something. There is no land, so a territory is a
+persistent **weather system**: each domain owns a great cloud mass tinted within
+the blue-violet family, and the strongest clusters carry a storm vortex the way
+the Great Dark Spot sits in a belt. Everything is dragged by a shared
+differential-rotation shear — faster at the equator than the poles — which is
+what produces the long swirls rather than flat stripes.
+
+Baked once into a 2048×1024 equirectangular texture at load. RGB is daylight
+albedo; alpha is night-side emissive (polar aurora and storm luminance), which
+stops the dark limb becoming a dead black crescent.
 
 ```bash
-npm run preview:planet    # renders the same formula on the CPU
+npm run preview:planet
 ```
 
-That writes `public/planet-preview.png` (the flat map) and
-`public/planet-globe.png` (an orthographic render lit by the same sun), and
-**fails if land drifts outside 18–55% or fewer than 10 domains have territory.**
-It exists because the first version of the shader produced a planet that was
-100% land, and nobody would have known until they opened a browser.
+Renders the same formula on the CPU to `public/planet-globe.png` and
+`public/planet-preview.png`, and **fails** on: territory outside 20–85%, storms
+outside 0.5–15%, night glow over 12%, mean luminance over 0.55, or band contrast
+under 0.02. That last one is measured across *latitude* specifically — global
+variance would pass on a planet that was merely noisy.
 
-Three things make the terrain read as geography rather than noise:
+It has already caught a planet that was 100% land, a night side that glowed like
+a lamp, and padding cluster slots winning the nearest-neighbour test.
 
-- **Domain warping** before the sea-level threshold. A plain distance threshold
-  around each cluster gives circles, and circles read as CGI. Warping produces
-  peninsulas, inland seas, and archipelagos.
-- **Coastlines.** One bright pixel of shoreline does more work than any amount
-  of terrain detail — it is what lets the eye parse a sphere as a map.
-- **City lights on low coastal ground**, inside high-potential regions, gated by
-  a high-frequency threshold so they form filaments rather than patches. Real
-  settlement follows water and lowland.
+The whole surface stays under 0.55 luminance on purpose. A hundred thousand data
+points sit on top of it, and the moment the planet competes, the map stops being
+readable.
 
-Territories are *tinted*, not painted. The planet stays muted so a hundred
-thousand data points on top of it remain the brightest things on screen. The
-moment the surface competes, the map stops being readable.
+## The sky
+
+Two thresholded noise fields at different scales, plus a broad galactic-plane
+band, drawn on a camera-locked box with `gl_Position.xyww` so it sits exactly on
+the far plane at zero sorting cost. Stars are tinted across blue-white → amber,
+because a monochrome starfield reads as dust on the lens.
+
+## Idle rotation
+
+The globe drifts when you leave it alone and stops the moment you engage. It
+pauses on **any** pointer activity over the canvas — not just hover — because
+gating on hover alone still let the node you were reaching for slide away before
+you got to it. Aiming had become a chase. It resumes after 4 seconds, ramping up
+over a second so the restart is not its own jolt.
 
 ## Design decisions worth knowing before you edit
 
