@@ -401,3 +401,243 @@ class Database:
                 """,
                 limit,
             )]
+
+    # ------------------------------------------------------------- phase 2
+
+    async def backfill_content_hashes(self) -> int:
+        """Compute `content_hash` for rows that predate it.
+
+        Everything about re-run cost depends on this column: it is the only
+        thing that distinguishes "already embedded, skip it" from "the README
+        changed, pay again".
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, embedding_input FROM repo "
+                "WHERE content_hash IS NULL AND embedding_input IS NOT NULL"
+            )
+            if not rows:
+                return 0
+            await conn.executemany(
+                "UPDATE repo SET content_hash = $2 WHERE id = $1",
+                [(r["id"], content_hash(r["embedding_input"])) for r in rows],
+            )
+        return len(rows)
+
+    async def rows_needing_embedding(self, limit: int | None = None) -> list[dict[str, Any]]:
+        """Rows whose embedding is missing or stale.
+
+        `IS DISTINCT FROM` rather than `<>`: a plain comparison against NULL is
+        NULL, not TRUE, so never-embedded rows would be silently excluded and
+        the first run would embed nothing at all.
+        """
+        query = """
+            SELECT id, full_name, embedding_input, content_hash
+            FROM repo
+            WHERE NOT low_signal
+              AND embedding_input IS NOT NULL
+              AND length(embedding_input) > 0
+              AND (embedded_hash IS NULL OR embedded_hash IS DISTINCT FROM content_hash)
+            ORDER BY stars DESC
+        """
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(query)]
+
+    async def store_embeddings(self, vectors: dict[int, bytes], dim: int) -> int:
+        """Persist a batch. `embedded_hash` is copied from the CURRENT
+        `content_hash`, which is what makes the next run skip these rows."""
+        if not vectors:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    UPDATE repo
+                       SET embedding = $2, embedding_dim = $3,
+                           embedded_hash = content_hash, embedded_at = now()
+                     WHERE id = $1
+                    """,
+                    [(rid, blob, dim) for rid, blob in vectors.items()],
+                )
+        return len(vectors)
+
+    async def embedded_rows(self) -> list[dict[str, Any]]:
+        """Everything with a current embedding, for projection and clustering."""
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(
+                """
+                SELECT id, full_name, embedding, embedding_dim, stars,
+                       criticality, low_signal, is_archived, is_fork
+                FROM repo
+                WHERE embedding IS NOT NULL
+                ORDER BY id
+                """
+            )]
+
+    async def store_projection(
+        self,
+        positions: dict[int, tuple[float, float]],
+        clusters: dict[int, tuple[int, int]] | None = None,
+    ) -> int:
+        """Write theta/phi, and optionally cluster_id/domain, in one pass."""
+        if not positions:
+            return 0
+        clusters = clusters or {}
+        payload = [
+            (rid, theta, phi, *clusters.get(rid, (None, None)))
+            for rid, (theta, phi) in positions.items()
+        ]
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    UPDATE repo
+                       SET theta = $2, phi = $3,
+                           cluster_id = COALESCE($4, cluster_id),
+                           domain     = COALESCE($5, domain)
+                     WHERE id = $1
+                    """,
+                    payload,
+                )
+        return len(payload)
+
+    async def store_ranks(self, ranks: dict[int, float]) -> int:
+        if not ranks:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    INSERT INTO repo_relatedness (repo_id, rank) VALUES ($1, $2)
+                    ON CONFLICT (repo_id) DO UPDATE SET rank = EXCLUDED.rank
+                    """,
+                    list(ranks.items()),
+                )
+        return len(ranks)
+
+    async def replace_similar_edges(self, edges: list[tuple[int, int, float]]) -> int:
+        """Swap in a fresh `similar_to` layer.
+
+        Deleted first because kNN edges are entirely derived: a re-projection
+        invalidates all of them at once, and leaving the old ones would union
+        two different maps' notions of similarity.
+        """
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute("DELETE FROM edge WHERE kind = 1")
+                if edges:
+                    await conn.executemany(
+                        "INSERT INTO edge (src, dst, kind, weight) VALUES ($1, $2, 1, $3) "
+                        "ON CONFLICT (src, dst, kind) DO UPDATE SET weight = EXCLUDED.weight",
+                        edges,
+                    )
+        return len(edges)
+
+    async def relatedness_edges(self) -> list[tuple[int, int, float, int]]:
+        """Edges PageRank runs over: `depends_on` (0) and `used_with` (2).
+
+        `similar_to` is excluded on purpose. It is a kNN graph, so every node
+        has roughly k neighbours by construction and it carries almost no
+        information about importance — including it would smear the ranking
+        towards uniform. See docs/RELATEDNESS.md.
+        """
+        async with self.pool.acquire() as conn:
+            return [
+                (r["src"], r["dst"], float(r["w"]), r["kind"])
+                for r in await conn.fetch(
+                    "SELECT src, dst, kind, COALESCE(ppmi, weight) AS w "
+                    "FROM edge WHERE kind IN (0, 2)"
+                )
+            ]
+
+    async def world_rows(self) -> list[dict[str, Any]]:
+        """Everything the tile writer needs, in one query.
+
+        Only rows with a position: an embedded repository that has not been
+        projected has no place on the globe yet.
+        """
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(
+                """
+                SELECT r.id, r.full_name, r.theta, r.phi, r.domain, r.cluster_id,
+                       r.stars, r.low_signal, r.is_archived, r.is_fork,
+                       COALESCE(rr.rank, 0.0) AS rank
+                FROM repo r
+                LEFT JOIN repo_relatedness rr ON rr.repo_id = r.id
+                WHERE r.theta IS NOT NULL AND r.phi IS NOT NULL
+                ORDER BY r.id
+                """
+            )]
+
+    async def store_clusters(self, entries: list[dict[str, Any]]) -> int:
+        if not entries:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    INSERT INTO cluster (id, label, domain, size, theta, phi)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (id) DO UPDATE SET
+                        label = EXCLUDED.label, domain = EXCLUDED.domain,
+                        size  = EXCLUDED.size,  theta  = EXCLUDED.theta,
+                        phi   = EXCLUDED.phi
+                    """,
+                    [
+                        (e["id"], e.get("label"), e.get("domain"), e.get("size", 0),
+                         e.get("theta"), e.get("phi"))
+                        for e in entries
+                    ],
+                )
+        return len(entries)
+
+    async def start_projection_run(self, **fields) -> int:
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                INSERT INTO projection_run (n_points, embed_model, embed_dim, umap_params, seed)
+                VALUES ($1, $2, $3, $4, $5) RETURNING id
+                """,
+                fields.get("n_points"), fields.get("embed_model"), fields.get("embed_dim"),
+                json.dumps(fields.get("umap_params") or {}), fields.get("seed"),
+            )
+
+    async def finish_projection_run(self, run_id: int, notes: str = "") -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE projection_run SET finished_at = now(), notes = $2 WHERE id = $1",
+                run_id, notes,
+            )
+
+    async def find_repos(self, names: Sequence[str]) -> dict[str, dict[str, Any]]:
+        """Look up specific repositories by full name — for the spot-check."""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, full_name, theta, phi, domain, cluster_id, embedding, embedding_dim
+                FROM repo WHERE lower(full_name) = ANY($1::text[])
+                """,
+                [n.lower() for n in names],
+            )
+        return {r["full_name"].lower(): dict(r) for r in rows}
+
+    async def phase2_report(self) -> dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            return dict(await conn.fetchrow(
+                """
+                SELECT
+                  count(*)                                              AS repos,
+                  count(*) FILTER (WHERE NOT low_signal)                AS embeddable,
+                  count(embedding)                                      AS embedded,
+                  count(*) FILTER (WHERE embedded_hash IS DISTINCT FROM content_hash
+                                     AND NOT low_signal
+                                     AND embedding_input IS NOT NULL)   AS stale,
+                  count(theta)                                          AS projected,
+                  count(domain)                                         AS with_domain,
+                  count(*) FILTER (WHERE cluster_id >= 0)               AS clustered,
+                  count(DISTINCT cluster_id) FILTER (WHERE cluster_id >= 0) AS clusters
+                FROM repo
+                """
+            ))

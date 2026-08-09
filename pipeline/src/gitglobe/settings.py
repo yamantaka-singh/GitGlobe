@@ -27,7 +27,15 @@ class Settings:
     gcp_project: str = ""
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls, *, require_github: bool = True) -> "Settings":
+        """Read configuration.
+
+        `require_github=False` for the Phase 2 stages. Projection and clustering
+        run entirely on local CPU against rows already in Postgres, and failing
+        them for a missing ingest credential would be an obstacle with no
+        purpose — the sort of thing that makes people set a junk token and
+        forget the check exists.
+        """
         settings = cls(
             database_url=os.getenv(
                 "DATABASE_URL", "postgresql://gitglobe:gitglobe@localhost:5433/gitglobe"
@@ -35,7 +43,7 @@ class Settings:
             github_tokens=_tokens(),
             gcp_project=os.getenv("GCP_PROJECT", ""),
         )
-        if not settings.github_tokens:
+        if require_github and not settings.github_tokens:
             raise RuntimeError(
                 "No GitHub token. Set GITHUB_TOKEN (or GITHUB_TOKENS for a pool).\n"
                 "Create one at https://github.com/settings/tokens — `public_repo` is enough."

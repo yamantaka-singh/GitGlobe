@@ -205,8 +205,181 @@ def _cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------- phase 2
+
+
+async def _with_db(fn):
+    """Open a pool, run, close. Phase 2 needs no GitHub token."""
+    from .db import Database
+    from .settings import Settings
+
+    settings = Settings.from_env(require_github=False)
+    db = await Database.connect(settings.database_url)
+    try:
+        await db.migrate()
+        return await fn(db, settings)
+    finally:
+        await db.close()
+
+
+async def _cmd_embed(args: argparse.Namespace) -> int:
+    from .phase2 import stage_embed
+
+    async def run(db, settings):
+        if not settings.gcp_project:
+            print("Set GCP_PROJECT (or run `gcloud config set project <id>`).", file=sys.stderr)
+            return 1
+        result = await stage_embed(db, settings, limit=args.limit, dry_run=args.dry_run)
+        print(f"\nEmbedded {result.rows:,} rows. {result.detail}")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_project(args: argparse.Namespace) -> int:
+    from .phase2 import stage_project
+    from .project.spherical import ProjectionParams
+
+    async def run(db, _settings):
+        params = ProjectionParams(
+            n_neighbors=args.neighbors, min_dist=args.min_dist, seed=args.seed
+        )
+        result = await stage_project(db, params=params)
+        print(f"\nProjected {result.rows:,} repositories.")
+        for problem in result.detail["problems"]:
+            print(f"  WARNING: {problem}")
+        print(f"  coverage: {result.detail['coverage']}")
+        print(f"  similar_to edges: {result.detail['similar_edges']:,}")
+        print("\nNext: gitglobe cluster")
+        return 1 if result.detail["problems"] else 0
+
+    return await _with_db(run)
+
+
+async def _cmd_cluster(args: argparse.Namespace) -> int:
+    from .phase2 import stage_cluster
+
+    async def run(db, _settings):
+        result = await stage_cluster(
+            db, min_cluster_size=args.min_cluster_size, seed=args.seed
+        )
+        print(f"\n{result.detail['summary']}")
+        print(f"  purity: {result.detail['purity']}")
+        print("\nNext: gitglobe rank")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_rank(args: argparse.Namespace) -> int:
+    from .phase2 import stage_rank
+
+    async def run(db, _settings):
+        result = await stage_rank(db)
+        print(f"\nRanked {result.rows:,} repositories over {result.detail['edges']:,} edges "
+              f"in {result.detail['iterations']} iterations.")
+        if not result.detail["converged"]:
+            print("  WARNING: PageRank did not converge — ranks are provisional.")
+        print("\nNext: gitglobe build")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_build(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .phase2 import stage_build
+
+    async def run(db, _settings):
+        out = Path(args.out).resolve()
+        result = await stage_build(db, out, seed=args.seed)
+        print(f"\nWrote {result.rows:,} nodes, {result.detail['bytes'] / 1e6:.1f} MB to {out}")
+        print("\nNext:")
+        print("  cd ../web && npm run verify     # 47 integrity checks")
+        print("  gitglobe spotcheck              # does the map mean anything")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_spotcheck(args: argparse.Namespace) -> int:
+    """The Phase 2 exit criterion.
+
+    Everything else verifies that the pipeline is self-consistent. This is the
+    only check that asks whether the result is *correct* — whether repositories
+    that belong together ended up together.
+    """
+    import numpy as np
+
+    from .checks.neighbours import (
+        DEFAULT_EXPECTATIONS,
+        baseline_distance,
+        run_expectations,
+        summarise,
+    )
+
+    async def run(db, _settings):
+        wanted = sorted({
+            name
+            for exp in DEFAULT_EXPECTATIONS
+            for name in (exp.near or []) + (list(exp.far[0]) + list(exp.far[1]) if exp.far else [])
+        })
+        found = await db.find_repos(wanted)
+        positions = {
+            row["full_name"]: (float(row["theta"]), float(row["phi"]))
+            for row in found.values()
+            if row["theta"] is not None
+        }
+
+        rows = await db.world_rows()
+        baseline = baseline_distance(
+            np.array([r["theta"] for r in rows]), np.array([r["phi"] for r in rows])
+        ) if rows else None
+
+        print("\nGitGlobe — does the map mean anything?")
+        print("=" * 62)
+        text, ok = summarise(run_expectations(positions), baseline)
+        print(text)
+
+        if not positions:
+            print("\n  None of the reference repositories are in this corpus.")
+            print("  On a 5k proof run that is expected — the check needs the full ingest.")
+            return 0
+        print("\n" + ("PASS" if ok else "FAIL — the map does not group things correctly."))
+        return 0 if ok else 1
+
+    return await _with_db(run)
+
+
+async def _cmd_status(args: argparse.Namespace) -> int:
+    async def run(db, _settings):
+        report = await db.phase2_report()
+        print("\nGitGlobe — Phase 2 status")
+        print("=" * 46)
+        for key, value in report.items():
+            print(f"  {key:<14} {value:>12,}")
+
+        embeddable = report["embeddable"] or 1
+        print("\nNext step")
+        print("-" * 46)
+        if report["stale"]:
+            print(f"  gitglobe embed        ({report['stale']:,} rows need embedding)")
+        elif report["embedded"] < embeddable * 0.9:
+            print("  gitglobe embed        (most rows are not embedded)")
+        elif not report["projected"]:
+            print("  gitglobe project")
+        elif not report["with_domain"]:
+            print("  gitglobe cluster")
+        else:
+            print("  gitglobe rank && gitglobe build")
+        return 0
+
+    return await _with_db(run)
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="gitglobe", description="GitGlobe ingest pipeline")
+    parser = argparse.ArgumentParser(prog="gitglobe", description="GitGlobe pipeline")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -237,6 +410,38 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("path", nargs="?", default="-")
     p.add_argument("--name", default="")
     p.set_defaults(func=_cmd_clean, is_async=False)
+
+    # ---- phase 2 -----------------------------------------------------------
+
+    p = sub.add_parser("embed", help="Embed capability text with Vertex AI (costs money)")
+    p.add_argument("--limit", type=int, help="stop after N rows — use this to sanity-check cost")
+    p.add_argument("--dry-run", action="store_true", help="print the cost estimate and stop")
+    p.set_defaults(func=_cmd_embed, is_async=True)
+
+    p = sub.add_parser("project", help="UMAP embeddings onto the sphere (CPU, slow)")
+    p.add_argument("--neighbors", type=int, default=30)
+    p.add_argument("--min-dist", type=float, default=0.05)
+    p.add_argument("--seed", type=int, default=42)
+    p.set_defaults(func=_cmd_project, is_async=True)
+
+    p = sub.add_parser("cluster", help="HDBSCAN clusters and the twelve domains")
+    p.add_argument("--min-cluster-size", type=int, default=60)
+    p.add_argument("--seed", type=int, default=42)
+    p.set_defaults(func=_cmd_cluster, is_async=True)
+
+    p = sub.add_parser("rank", help="PageRank over depends_on and used_with")
+    p.set_defaults(func=_cmd_rank, is_async=True)
+
+    p = sub.add_parser("build", help="Write tiles, graph and manifest for the web app")
+    p.add_argument("--out", default="../web/public/tiles")
+    p.add_argument("--seed", type=int, default=42)
+    p.set_defaults(func=_cmd_build, is_async=True)
+
+    p = sub.add_parser("spotcheck", help="Does the map mean anything? The Phase 2 exit criterion")
+    p.set_defaults(func=_cmd_spotcheck, is_async=True)
+
+    p = sub.add_parser("status", help="What is embedded, projected, clustered")
+    p.set_defaults(func=_cmd_status, is_async=True)
 
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)

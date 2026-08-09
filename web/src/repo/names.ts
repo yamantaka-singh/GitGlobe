@@ -1,12 +1,17 @@
 /**
- * Procedural repository names.
+ * Repository names — real ones when the world has them, procedural otherwise.
  *
  * "#48213" reads as a dot. "vecstore-rs" reads as a repository. That difference
- * is most of why the Phase 0 globe felt like decoration rather than data, and
- * it costs zero bytes on the wire: names are a deterministic function of the
- * repo id, generated on the client.
+ * is most of why the Phase 0 globe felt like decoration rather than data.
  *
- * Phase 1 deletes this file and uses real names.
+ * Real names arrive as `names-N.json`, one array per band, aligned with that
+ * band's tile: entry `i` names point `i`. No id lookup, no map of a million
+ * entries — `repoId` is `ordinal + 1` and bands are contiguous slices of the
+ * rank order, so a band's names slot straight into a flat array at `idOffset`.
+ *
+ * The procedural generator stays as the fallback. Synthetic worlds from
+ * `gen-world.ts` have no names, and the renderer has to be developable without
+ * a database and a Vertex AI bill behind it.
  */
 
 const STEMS: Record<number, string[]> = {
@@ -54,9 +59,45 @@ export interface RepoIdentity {
 
 const cache = new Map<number, RepoIdentity>();
 
+/**
+ * Real names by node ordinal (`repoId - 1`). Sparse until every band loads,
+ * which is the point: band 0 arrives first and its names are usable
+ * immediately, without waiting on the 80% of the corpus in band 2.
+ */
+const realNames: string[] = [];
+
+/** Called by the tile loader once a band's `names-N.json` arrives. */
+export function registerNames(idOffset: number, names: readonly string[]): void {
+  for (let i = 0; i < names.length; i++) realNames[idOffset + i] = names[i];
+  // Entries cached before the names landed are procedural and now wrong.
+  cache.clear();
+}
+
+export function hasRealNames(): boolean {
+  return realNames.length > 0;
+}
+
+/** Test seam — resets module state between cases. */
+export function clearNames(): void {
+  realNames.length = 0;
+  cache.clear();
+}
+
 export function repoIdentity(repoId: number, domain: number): RepoIdentity {
   const cached = cache.get(repoId);
   if (cached) return cached;
+
+  const real = realNames[repoId - 1];
+  if (real) {
+    const slash = real.indexOf('/');
+    const identity: RepoIdentity =
+      slash > 0
+        ? { org: real.slice(0, slash), name: real.slice(slash + 1), fullName: real }
+        : { org: '', name: real, fullName: real };
+    if (cache.size > 4096) cache.clear();
+    cache.set(repoId, identity);
+    return identity;
+  }
 
   const stems = STEMS[domain] ?? STEMS[0];
   const stem = pick(stems, repoId, 0x9e37);

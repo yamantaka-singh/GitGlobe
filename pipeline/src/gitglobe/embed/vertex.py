@@ -150,12 +150,19 @@ class VertexEmbedder:
         self._credentials = None
 
     async def __aenter__(self) -> "VertexEmbedder":
+        import os
         import httpx
+        from google.oauth2.credentials import Credentials
         from google.auth import default as google_auth_default
 
-        self._credentials, project = google_auth_default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
+        token = os.environ.get("GOOGLE_ACCESS_TOKEN")
+        if token:
+            self._credentials = Credentials(token=token)
+            project = os.environ.get("GCP_PROJECT", "gitglobe")
+        else:
+            self._credentials, project = google_auth_default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
         if not self.config.project:
             self.config.project = project or ""
         if not self.config.project:

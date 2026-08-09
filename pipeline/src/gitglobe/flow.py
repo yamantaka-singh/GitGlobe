@@ -27,6 +27,7 @@ from .clean.readme import clean_readme
 from .db import Database, RepoRow
 from .ingest.github import GitHubIngest
 from .ingest.plan import (
+    EXPECTED_YIELD,
     SEARCH_RESULT_CAP,
     band_query,
     language_queries,
@@ -156,7 +157,7 @@ async def _drain(gh, db: Database, query: str, state: _Progress, logger) -> bool
         state.total += seen
         state.shards_skipped += 1
         state.last_shard_rows = seen
-        return seen >= SEARCH_RESULT_CAP
+        return seen >= EXPECTED_YIELD
 
     if cursor:
         logger.info("Resuming %s at %d rows", query, seen)
@@ -181,7 +182,7 @@ async def _drain(gh, db: Database, query: str, state: _Progress, logger) -> bool
 
     await db.checkpoint(query, None, rows_seen=seen, completed=True)
     state.last_shard_rows = seen
-    return seen >= SEARCH_RESULT_CAP
+    return seen >= EXPECTED_YIELD
 
 
 def _clean(record) -> RepoRow:

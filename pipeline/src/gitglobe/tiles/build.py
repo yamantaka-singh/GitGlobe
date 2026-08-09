@@ -35,7 +35,12 @@ from pathlib import Path
 
 import numpy as np
 
-from ..graph.pagerank import DEFAULT_DAMPING, PageRankResult, to_display_size
+from ..graph.pagerank import (
+    DEFAULT_DAMPING,
+    PageRankResult,
+    banded_display_size,
+    importance_order,
+)
 from .format import (
     FLAG_ARCHIVED,
     FLAG_FORK,
@@ -74,9 +79,24 @@ class WorldInput:
     low_signal: np.ndarray
     is_archived: np.ndarray
     is_fork: np.ndarray
+    #: Secondary importance signal — stars. Required, because PageRank ties
+    #: roughly 80% of a real corpus on the exact teleport floor and cannot
+    #: order or size any of it. See `importance_order`.
+    stars: np.ndarray | None = None
 
     def __len__(self) -> int:
         return len(self.repo_id)
+
+    def tiebreak(self) -> np.ndarray:
+        """Log stars — the tail's only source of differentiation.
+
+        Log-scaled because stars are power-law: raw counts make the ordering
+        within a tie group as top-heavy as the distribution itself, and the
+        point of the tiebreak is to spread that group out.
+        """
+        if self.stars is None:
+            return np.zeros(len(self))
+        return np.log1p(np.maximum(np.asarray(self.stars, np.float64), 0.0))
 
     def validate(self) -> None:
         n = len(self)
@@ -89,6 +109,8 @@ class WorldInput:
                 raise ValueError(f"{name} has {got} rows, expected {n}")
         if n == 0:
             raise ValueError("nothing to build — run embed and project first")
+        if self.stars is not None and len(self.stars) != n:
+            raise ValueError(f"stars has {len(self.stars)} rows, expected {n}")
         if len(np.unique(self.repo_id)) != n:
             raise ValueError("repo_id must be unique")
         for name in ("theta", "phi", "rank"):
@@ -112,14 +134,14 @@ def pack_flags(low_signal: np.ndarray, archived: np.ndarray, fork: np.ndarray) -
     return flags
 
 
-def rank_order(rank: np.ndarray) -> np.ndarray:
-    """Indices sorted by rank descending, ties broken deterministically.
+def rank_order(rank: np.ndarray, tiebreak: np.ndarray | None = None) -> np.ndarray:
+    """Indices sorted by rank descending, then by `tiebreak`, then stably.
 
-    `kind="stable"` matters: without it, two runs over the same data can order
-    equal-ranked repositories differently, every node id shifts, and the whole
-    globe appears to have been rebuilt from scratch when nothing changed.
+    Stability is what makes rebuilds diffable: without it, two runs over the
+    same data order equal-ranked repositories differently, every node id shifts,
+    and the whole globe looks rebuilt when nothing changed.
     """
-    return np.argsort(-np.asarray(rank, dtype=np.float64), kind="stable")
+    return importance_order(rank, tiebreak)
 
 
 def select_ambient(
@@ -177,7 +199,8 @@ def build_world(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     n = len(world)
-    order = rank_order(world.rank)
+    tiebreak = world.tiebreak()
+    order = importance_order(world.rank, tiebreak)
 
     # Database id -> node ordinal. Built once; every edge remap reads it.
     ordinal_of = {int(rid): i for i, rid in enumerate(world.repo_id[order])}
@@ -185,7 +208,6 @@ def build_world(
     theta = world.theta[order]
     phi = world.phi[order]
     rank = np.asarray(world.rank, np.float64)[order]
-    size = to_display_size(rank)
     domain = world.domain[order].astype(np.uint8)
     flags = pack_flags(world.low_signal[order], world.is_archived[order], world.is_fork[order])
     names = world.full_name[order]
@@ -193,6 +215,9 @@ def build_world(
     # ---- tiles ----------------------------------------------------------
     spec = bands or BandSpec()
     sizes = spec.sizes(n)
+    # Sized per band, not globally: band 0 is the layer always in focus, and a
+    # single global percentile compresses it into 2% of the radius range.
+    size = banded_display_size(rank, sizes, tiebreak[order])
     manifest_bands: list[ManifestBand] = []
     files: list[Path] = []
     total_bytes = 0

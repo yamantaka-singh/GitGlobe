@@ -1,3 +1,4 @@
+import { registerNames } from '../repo/names';
 import { decodeTile, type Tile } from './format';
 
 export interface GraphManifest {
@@ -16,7 +17,8 @@ export interface TileManifest {
   seed: number;
   total: number;
   synthetic: boolean;
-  bands: Array<{ band: number; count: number; bytes: number; file: string }>;
+  /** `names` is present on pipeline-built worlds and absent on synthetic ones. */
+  bands: Array<{ band: number; count: number; bytes: number; file: string; names?: string }>;
   domains: string[];
   /** Absent on pre-v2 worlds generated before the graph existed. */
   graph?: GraphManifest;
@@ -70,6 +72,29 @@ export async function fetchBand(
   const idOffset = manifest.bands
     .filter((b) => b.band < band)
     .reduce((sum, b) => sum + b.count, 0);
+
+  // Names are fetched after the tile and never block it. A band whose names
+  // fail to load still renders — it falls back to procedural labels, which is
+  // strictly better than an empty globe.
+  if (entry.names) {
+    try {
+      const nameRes = await fetch(`${TILE_ROOT}${entry.names}`, { signal });
+      if (nameRes.ok) {
+        const names: string[] = await nameRes.json();
+        if (names.length !== tile.count) {
+          console.warn(
+            `${entry.names} has ${names.length} names for ${tile.count} points — ` +
+              `names and tiles are out of sync. Rebuild.`,
+          );
+        }
+        registerNames(idOffset, names);
+      }
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.warn(`Could not load ${entry.names}; falling back to generated names.`, err);
+      }
+    }
+  }
 
   return { band, tile, idOffset, bytes: buf.byteLength, loadMs: performance.now() - t0 };
 }
