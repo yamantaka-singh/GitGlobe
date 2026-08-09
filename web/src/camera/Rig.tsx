@@ -114,7 +114,6 @@ export const globeCamera = new GlobeCamera();
 export function Rig({ radius }: { radius: number }) {
   const ref = useRef<CameraControlsImpl>(null);
   const invalidate = useThree((s) => s.invalidate);
-  const gl = useThree((s) => s.gl);
 
   useEffect(() => {
     globeCamera.radius = radius;
