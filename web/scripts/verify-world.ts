@@ -7,7 +7,13 @@
  * overflow, id collisions, a CSR that points off the end of itself, PageRank
  * that silently stopped summing to 1.
  *
- * Usage:  npm run verify
+ * Usage:  npm run verify              (checks public/tiles)
+ *         npm run verify -- <dir>    (checks any world directory)
+ *
+ * The directory argument is what lets the Python pipeline be tested against
+ * these exact checks: it writes a world to a temp directory and runs this
+ * verifier over it. Duplicating the checks in Python would mean maintaining two
+ * definitions of "correct" that are free to drift apart.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -25,7 +31,7 @@ import {
 import { decodeGraph, WEIGHT_OUTGOING } from '../src/graph/format.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const TILES = resolve(HERE, '../public/tiles');
+const TILES = process.argv[2] ? resolve(process.argv[2]) : resolve(HERE, '../public/tiles');
 
 let failures = 0;
 

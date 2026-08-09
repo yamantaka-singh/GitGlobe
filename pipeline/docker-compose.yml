@@ -1,0 +1,23 @@
+# Local Postgres for Phase 1. Port 5433 on purpose — 5432 is almost always
+# already taken by something else, and the resulting "connection refused to the
+# wrong database" is a genuinely confusing hour to lose.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gitglobe-postgres
+    environment:
+      POSTGRES_USER: gitglobe
+      POSTGRES_PASSWORD: gitglobe
+      POSTGRES_DB: gitglobe
+    ports:
+      - "5433:5432"
+    volumes:
+      - gitglobe-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitglobe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gitglobe-pgdata:

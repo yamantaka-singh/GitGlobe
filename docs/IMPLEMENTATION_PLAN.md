@@ -35,6 +35,10 @@ The ordering is deliberately risk-first, not feature-first. The most likely reas
 - deps.dev BigQuery extract → `edge` rows; reconcile package names to repos via ecosyste.ms.
 - The cleaner (ARCHITECTURE §2.2). **Build this test-first** — it's pure text-in/text-out, so freeze 30 real READMEs as fixtures and assert on the output. This is the highest-leverage test suite in the project.
 - OSSF criticality scores joined in; `size` computed per ADR-008.
+- **Co-star extraction from GH Archive** → `star_event`. See
+  [RELATEDNESS.md](RELATEDNESS.md). This is the `used_with` signal, and it is the
+  only one that covers unpackaged repositories — awesome-lists, dotfiles,
+  notebooks, most C++ — which the dependency graph cannot see at all.
 - `low_signal` flagging; Prefect flow wrapping the whole thing, idempotent on re-run.
 
 **Exit criterion.** 100k rows with `clean_text`; manual review of 20 random cleaned READMEs shows capability prose and no badge/install/license residue.
@@ -53,6 +57,10 @@ The ordering is deliberately risk-first, not feature-first. The most likely reas
 - cuML UMAP with `output_metric="haversine"` on Modal. **Verify haversine support on your cuML version early** — if missing, fall back to `umap-learn` on a 200k stratified sample plus the parametric encoder.
 - Sweep `n_neighbors` ∈ {15, 30, 50} × `min_dist` ∈ {0.0, 0.1}; judge by eye on a 20k subset before spending a full run.
 - HDBSCAN → clusters → Claude-generated labels.
+- PPMI over `star_event` → `used_with` edges, mutual top-k filtered.
+- **PageRank over the UNION of `depends_on` and `used_with`**, not dependencies
+  alone — otherwise ~15% of repositories sit at the teleport floor,
+  indistinguishable, and node size means nothing for them.
 - Parametric encoder (512→256→3, renormalised) trained against the frozen layout, for nightly placement.
 - S2 binning, LOD banding, tile writer, `layout_version` stamping.
 
@@ -102,6 +110,9 @@ The ordering is deliberately risk-first, not feature-first. The most likely reas
 
 **Tasks**
 
+- `find_related(repo_id, kind)` so the agent can answer "what works with X"
+  separately from "what is like X". Users ask both and they are different
+  questions; one tool that conflates them answers neither well.
 - Tool definitions per ARCHITECTURE §6.1. `fly_to` accepts `repo_ids` **only** — enforce with a Pydantic model that has no coordinate fields at all, so it's structurally impossible.
 - Vercel AI SDK `streamText` with `tools` against Claude Sonnet 4.5; SSE endpoint interleaving `text` / `tool` / `camera` events.
 - Client dispatcher: `camera` events execute immediately, in parallel with text rendering.
@@ -119,13 +130,21 @@ The ordering is deliberately risk-first, not feature-first. The most likely reas
 
 **Tasks**
 
-- Semantic kNN edges (k=8, cosine > 0.82) computed offline from the Qdrant index.
+- Arcs are `depends_on` (solid, directional) and `used_with` (dashed) — NOT
+  semantic kNN. If UMAP worked, similar repos are already adjacent, so an arc
+  between them says nothing the proximity did not. See
+  [RELATEDNESS.md](RELATEDNESS.md#similar_to-edges-should-not-be-drawn).
+- **Minimum angular separation filter**: only draw arcs that span real distance.
+  A short arc is visual noise; a long one is a finding.
+- `similar_to` (kNN) moves to the detail panel as an "alternatives" list.
 - Arc geometry: `QuadraticBezierCurve3` through a lifted midpoint, batched into one `LineSegments2`.
 - Visual distinction: dependencies solid with directional dash flow; semantic edges faint and dashed.
 - Arc pool with fade-in/out; hard cap 2,000.
 - `draw_edges` agent tool wired to the same path.
 
-**Exit criterion.** Clicking `langchain` draws arcs to its real dependencies and semantic neighbours, at 60fps, with no flicker on rapid selection changes.
+**Exit criterion.** Clicking `langchain` draws arcs to its real dependencies and
+to `chromadb` / `ollama` / `llama-index` — the things it is *used with*, which is
+the query the product exists to answer. 60fps, no flicker on rapid selection.
 
 ---
 
