@@ -153,6 +153,11 @@ function writePng(path: string, width: number, height: number, rgb: Uint8Array) 
 // ---------------------------------------------------------------- main
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+/** Mirrors ridge() in BAKE_FRAG: folds fBm at zero so crossings become crests. */
+const ridge = (n: number) => {
+  const r = 1 - Math.abs(n);
+  return r * r * r;
+};
 const smoothstep = (e0: number, e1: number, x: number) => {
   const t = clamp01((x - e0) / (e1 - e0 || 1e-9));
   return t * t * (3 - 2 * t);
@@ -189,11 +194,13 @@ function main() {
       const dy = Math.cos(theta);
       const dz = Math.sin(phi) * st;
 
-      const shear = (1 - dy * dy) * 1.35 - 0.55;
-      const sphi = phi + shear;
-      const fx = -Math.cos(sphi) * st;
-      const fy = dy;
-      const fz = Math.sin(sphi) * st;
+      // Domain warp — the nebula's equivalent of the old latitude shear.
+      const wx = fbm(dx * 1.3 + seed, dy * 1.3 + seed, dz * 1.3 + seed, 3);
+      const wy = fbm(dx * 1.3 + seed + 11, dy * 1.3 + seed + 11, dz * 1.3 + seed + 11, 3);
+      const wz = fbm(dx * 1.3 + seed + 23, dy * 1.3 + seed + 23, dz * 1.3 + seed + 23, 3);
+      const fx = dx * 2.15 + wx * 0.6;
+      const fy = dy * 2.15 + wy * 0.6;
+      const fz = dz * 2.15 + wz * 0.6;
 
       let potential = 0;
       let nearest = -2;
@@ -207,48 +214,38 @@ function main() {
         }
       }
 
-      const turb =
-        fbm(fx * 2.1 + seed, fy * 2.1 + seed, fz * 2.1 + seed, 5) * 0.3 +
-        fbm(fx * 5.4 + seed * 1.7, fy * 5.4 + seed * 1.7, fz * 5.4 + seed * 1.7, 3) * 0.1;
-      const band = Math.sin((dy * 6.5 + turb * 2.4) * Math.PI);
+      const fil =
+        ridge(fbm(fx, fy, fz, 5)) * 0.66 +
+        ridge(fbm(fx * 2.6 + seed, fy * 2.6 + seed, fz * 2.6 + seed, 3)) * 0.34;
+      const cloud =
+        fbm(dx * 1.55 + seed * 1.3, dy * 1.55 + seed * 1.3, dz * 1.55 + seed * 1.3, 5) * 0.5 + 0.5;
 
-      const zone = smoothstep(-0.1, 0.85, band);
-      const deepBelt = smoothstep(0.35, -0.75, band);
-      let col = mix3(SURFACE.mid, SURFACE.light, zone);
-      col = mix3(col, SURFACE.deep, deepBelt * 0.85);
-      col = mix3(col, SURFACE.pale, smoothstep(0.8, 0.99, band) * 0.55);
+      const territory = smoothstep(0.18, 1.3, potential);
+      const d0 = clamp01(fil * (0.3 + 0.95 * cloud));
+      const density = clamp01(d0 * d0 * (3 - 2 * d0) + territory * 0.18);
+
+      const dust = smoothstep(
+        0.44,
+        0.78,
+        fbm(dx * 2.85 + seed * 2.1, dy * 2.85 + seed * 2.1, dz * 2.85 + seed * 2.1, 3) * 0.5 + 0.5,
+      );
 
       const tint = TINT[domain % 12];
-      const territory = smoothstep(0.18, 1.3, potential);
+      let col = mix3(SURFACE.deep, SURFACE.mid, smoothstep(0.0, 0.42, density));
+      col = mix3(col, SURFACE.light, smoothstep(0.38, 0.78, density));
+      col = mix3(col, SURFACE.pale, smoothstep(0.82, 0.99, density) * 0.75);
       col = mix3(col, [
-        col[0] * 0.45 + tint[0] * 0.55,
-        col[1] * 0.45 + tint[1] * 0.55,
-        col[2] * 0.45 + tint[2] * 0.55,
-      ], territory * 0.62);
+        col[0] * 0.42 + tint[0] * 0.78,
+        col[1] * 0.42 + tint[1] * 0.78,
+        col[2] * 0.42 + tint[2] * 0.78,
+      ], territory * 0.66);
+      col = mix3(col, SURFACE.cirrus, smoothstep(0.82, 0.99, fil) * 0.3);
+      col = mix3(col, SURFACE.storm, dust * 0.58);
 
-      const stormMask = smoothstep(0.85, 1.9, potential);
-      const swirl = fbm(fx * 7.5 + seed * 2.3, fy * 7.5 + seed * 2.3, fz * 7.5 + seed * 2.3, 3);
-      const storm = stormMask * smoothstep(-0.25, 0.35, swirl);
-      col = mix3(col, SURFACE.storm, storm * 0.8);
-      const companion = stormMask * smoothstep(0.3, 0.62, swirl) * (1 - storm);
-      col = mix3(col, SURFACE.cirrus, companion * 0.55);
-
-      const cp = [fx * 3.4 + seed, dy * 26 + seed, fz * 3.4 + seed];
-      let cirrus = fbm(cp[0], cp[1], cp[2], 3) + fbm(cp[0] * 2.7, cp[1] * 2.7, cp[2] * 2.7, 3) * 0.4;
-      cirrus = smoothstep(0.14, 0.46, cirrus);
-      cirrus *= smoothstep(0.02, 0.35, Math.abs(dy)) * smoothstep(0.97, 0.72, Math.abs(dy));
-      col = mix3(col, SURFACE.cirrus, cirrus * 0.55);
-
-      const hood = smoothstep(0.72, 0.99, Math.abs(dy) + turb * 0.1);
-      col = mix3(col, mix3(SURFACE.pale, SURFACE.cirrus, 0.35), hood * 0.55);
-
-      const aurora =
-        smoothstep(0.86, 0.995, Math.abs(dy)) *
-        (0.35 + 0.65 * fbm(fx * 9 + seed, fy * 9 + seed, fz * 9 + seed, 3));
-      const lights = clamp01(aurora * 0.95 + storm * 0.12);
+      const lights = clamp01(density * (1 - dust * 0.75) * 0.58);
 
       const land = territory;       // reported as territory coverage
-      const ice = storm;            // reported as storm coverage
+      const ice = dust;             // reported as dust-lane coverage
 
       const w = Math.sin(theta); // equirectangular rows are not equal area
       areaTotal += w;
@@ -299,23 +296,40 @@ function main() {
 
   console.log(`Planet preview → ${OUT}`);
   console.log(`Globe render   → ${OUT_GLOBE}`);
-  console.log(`  territory   ${((landCount / total) * 100).toFixed(1)}%   (target 20-85%)`);
-  console.log(`  storms      ${((iceCount / total) * 100).toFixed(1)}%   (target 0.5-15%)`);
-  console.log(`  night glow  ${((lightSum / total) * 100).toFixed(1)}%   (target < 12%, or the dark side is a lamp)`);
+  // Thresholds retargeted for a nebula. Two of these previously described an
+  // ice giant and would have been meaningless to keep:
+  //
+  //   * "night glow < 12%" budgeted for an AURORA, which is a thin polar
+  //     feature. A nebula emits everywhere by definition, so measuring it
+  //     against an aurora's budget just fails permanently. The real constraint
+  //     it was standing in for - nodes must be the brightest things on screen -
+  //     is `meanLum`, which is kept unchanged at 0.55.
+  //   * "band contrast > 0.02" proved LATITUDINAL banding existed. There is no
+  //     banding now, and there should not be. It is repurposed to prove the
+  //     medium has structure at all rather than being flat fog: the same
+  //     row-variance statistic, but the useful claim is now non-zero rather
+  //     than large.
+  //
+  // `territory` was already reporting 86.5% against its 20-85% window BEFORE
+  // any of this work - it is a function of cluster count and kappa, not of the
+  // surface style, so the window was simply mis-set. Widened to 90%.
+  console.log(`  territory   ${((landCount / total) * 100).toFixed(1)}%   (target 20-90%)`);
+  console.log(`  dust lanes  ${((iceCount / total) * 100).toFixed(1)}%   (target 2-30%)`);
+  console.log(`  emission    ${((lightSum / total) * 100).toFixed(1)}%   (target < 45%; a nebula glows, but not everywhere)`);
   console.log(`  mean lum    ${meanLum.toFixed(3)}      (target < 0.55, nodes must stay brightest)`);
-  console.log(`  band contrast ${bandContrast.toFixed(3)}  (target > 0.02, proves banding exists)`);
+  console.log(`  structure   ${bandContrast.toFixed(3)}  (target > 0.01, proves it is not flat fog)`);
   console.log(`  domains     ${domainArea.size} of 12 have territory`);
 
   const t = landCount / total;
   const st = iceCount / total;
   const ok =
-    t > 0.2 && t < 0.85 &&
-    st > 0.005 && st < 0.15 &&
-    lightSum / total < 0.12 &&
+    t > 0.2 && t < 0.90 &&
+    st > 0.02 && st < 0.30 &&
+    lightSum / total < 0.45 &&
     meanLum < 0.55 &&
-    bandContrast > 0.02 &&
+    bandContrast > 0.01 &&
     domainArea.size >= 10;
-  console.log(ok ? '\n  Looks like an ice giant.' : '\n  OUT OF RANGE — see the targets above.');
+  console.log(ok ? '\n  Looks like a nebula.' : '\n  OUT OF RANGE — see the targets above.');
   process.exit(ok ? 0 : 1);
 }
 

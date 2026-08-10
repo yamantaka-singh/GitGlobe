@@ -89,6 +89,10 @@ def synthetic_world(n=3000, n_edges=9000, seed=1):
         low_signal=rng.random(n) < 0.1,
         is_archived=rng.random(n) < 0.05,
         is_fork=np.zeros(n, bool),
+        # Power-law stars, like the real thing. This is the only signal that
+        # can order the ~80% of repositories PageRank ties on the teleport
+        # floor, so a synthetic world without it hides the bug it causes.
+        stars=(rng.pareto(1.2, n) * 40).astype(int),
     )
     edges = (repo_ids[src], repo_ids[dst], weight)
     return world, edges, result

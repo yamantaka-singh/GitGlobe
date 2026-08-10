@@ -401,3 +401,404 @@ class Database:
                 """,
                 limit,
             )]
+
+    # ------------------------------------------------------------- phase 2
+
+    async def backfill_content_hashes(self) -> int:
+        """Compute `content_hash` for rows that predate it.
+
+        Everything about re-run cost depends on this column: it is the only
+        thing that distinguishes "already embedded, skip it" from "the README
+        changed, pay again".
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT id, embedding_input FROM repo "
+                "WHERE content_hash IS NULL AND embedding_input IS NOT NULL"
+            )
+            if not rows:
+                return 0
+            await conn.executemany(
+                "UPDATE repo SET content_hash = $2 WHERE id = $1",
+                [(r["id"], content_hash(r["embedding_input"])) for r in rows],
+            )
+        return len(rows)
+
+    async def rows_needing_embedding(self, limit: int | None = None) -> list[dict[str, Any]]:
+        """Rows whose embedding is missing or stale.
+
+        `IS DISTINCT FROM` rather than `<>`: a plain comparison against NULL is
+        NULL, not TRUE, so never-embedded rows would be silently excluded and
+        the first run would embed nothing at all.
+        """
+        query = """
+            SELECT id, full_name, embedding_input, content_hash
+            FROM repo
+            WHERE NOT low_signal
+              AND embedding_input IS NOT NULL
+              AND length(embedding_input) > 0
+              AND (embedded_hash IS NULL OR embedded_hash IS DISTINCT FROM content_hash)
+            ORDER BY stars DESC
+        """
+        if limit:
+            query += f" LIMIT {int(limit)}"
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(query)]
+
+    async def store_embeddings(self, vectors: dict[int, bytes], dim: int) -> int:
+        """Persist a batch. `embedded_hash` is copied from the CURRENT
+        `content_hash`, which is what makes the next run skip these rows."""
+        if not vectors:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    UPDATE repo
+                       SET embedding = $2, embedding_dim = $3,
+                           embedded_hash = content_hash, embedded_at = now()
+                     WHERE id = $1
+                    """,
+                    [(rid, blob, dim) for rid, blob in vectors.items()],
+                )
+        return len(vectors)
+
+    async def embedded_rows(self) -> list[dict[str, Any]]:
+        """Everything with a current embedding, for projection and clustering."""
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(
+                """
+                SELECT id, full_name, embedding, embedding_dim, stars,
+                       criticality, low_signal, is_archived, is_fork
+                FROM repo
+                WHERE embedding IS NOT NULL
+                ORDER BY id
+                """
+            )]
+
+    async def store_projection(
+        self,
+        positions: dict[int, tuple[float, float]],
+        clusters: dict[int, tuple[int, int]] | None = None,
+    ) -> int:
+        """Write theta/phi, and optionally cluster_id/domain, in one pass."""
+        if not positions:
+            return 0
+        clusters = clusters or {}
+        payload = [
+            (rid, theta, phi, *clusters.get(rid, (None, None)))
+            for rid, (theta, phi) in positions.items()
+        ]
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    UPDATE repo
+                       SET theta = $2, phi = $3,
+                           cluster_id = COALESCE($4, cluster_id),
+                           domain     = COALESCE($5, domain)
+                     WHERE id = $1
+                    """,
+                    payload,
+                )
+        return len(payload)
+
+    async def store_ranks(self, ranks: dict[int, float]) -> int:
+        if not ranks:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    INSERT INTO repo_relatedness (repo_id, rank) VALUES ($1, $2)
+                    ON CONFLICT (repo_id) DO UPDATE SET rank = EXCLUDED.rank
+                    """,
+                    list(ranks.items()),
+                )
+        return len(ranks)
+
+    async def replace_similar_edges(self, edges: list[tuple[int, int, float]]) -> int:
+        """Swap in a fresh `similar_to` layer.
+
+        Deleted first because kNN edges are entirely derived: a re-projection
+        invalidates all of them at once, and leaving the old ones would union
+        two different maps' notions of similarity.
+        """
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute("DELETE FROM edge WHERE kind = 1")
+                if edges:
+                    await conn.executemany(
+                        "INSERT INTO edge (src, dst, kind, weight) VALUES ($1, $2, 1, $3) "
+                        "ON CONFLICT (src, dst, kind) DO UPDATE SET weight = EXCLUDED.weight",
+                        edges,
+                    )
+        return len(edges)
+
+    async def relatedness_edges(self) -> list[tuple[int, int, float, int]]:
+        """Edges PageRank runs over: `depends_on` (0) and `used_with` (2).
+
+        `similar_to` is excluded on purpose. It is a kNN graph, so every node
+        has roughly k neighbours by construction and it carries almost no
+        information about importance — including it would smear the ranking
+        towards uniform. See docs/RELATEDNESS.md.
+        """
+        async with self.pool.acquire() as conn:
+            return [
+                (r["src"], r["dst"], float(r["w"]), r["kind"])
+                for r in await conn.fetch(
+                    "SELECT src, dst, kind, COALESCE(ppmi, weight) AS w "
+                    "FROM edge WHERE kind IN (0, 2)"
+                )
+            ]
+
+    async def world_rows(self) -> list[dict[str, Any]]:
+        """Everything the tile writer needs, in one query.
+
+        Only rows with a position: an embedded repository that has not been
+        projected has no place on the globe yet.
+        """
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(
+                """
+                SELECT r.id, r.full_name, r.theta, r.phi, r.domain, r.cluster_id,
+                       r.stars, r.low_signal, r.is_archived, r.is_fork,
+                       COALESCE(rr.rank, 0.0) AS rank
+                FROM repo r
+                LEFT JOIN repo_relatedness rr ON rr.repo_id = r.id
+                WHERE r.theta IS NOT NULL AND r.phi IS NOT NULL
+                ORDER BY r.id
+                """
+            )]
+
+    async def store_clusters(self, entries: list[dict[str, Any]]) -> int:
+        if not entries:
+            return 0
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    INSERT INTO cluster (id, label, domain, size, theta, phi)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (id) DO UPDATE SET
+                        label = EXCLUDED.label, domain = EXCLUDED.domain,
+                        size  = EXCLUDED.size,  theta  = EXCLUDED.theta,
+                        phi   = EXCLUDED.phi
+                    """,
+                    [
+                        (e["id"], e.get("label"), e.get("domain"), e.get("size", 0),
+                         e.get("theta"), e.get("phi"))
+                        for e in entries
+                    ],
+                )
+        return len(entries)
+
+    async def start_projection_run(self, **fields) -> int:
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                INSERT INTO projection_run (n_points, embed_model, embed_dim, umap_params, seed)
+                VALUES ($1, $2, $3, $4, $5) RETURNING id
+                """,
+                fields.get("n_points"), fields.get("embed_model"), fields.get("embed_dim"),
+                json.dumps(fields.get("umap_params") or {}), fields.get("seed"),
+            )
+
+    async def finish_projection_run(self, run_id: int, notes: str = "") -> None:
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE projection_run SET finished_at = now(), notes = $2 WHERE id = $1",
+                run_id, notes,
+            )
+
+    async def find_repos(self, names: Sequence[str]) -> dict[str, dict[str, Any]]:
+        """Look up specific repositories by full name — for the spot-check."""
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, full_name, theta, phi, domain, cluster_id, embedding, embedding_dim
+                FROM repo WHERE lower(full_name) = ANY($1::text[])
+                """,
+                [n.lower() for n in names],
+            )
+        return {r["full_name"].lower(): dict(r) for r in rows}
+
+    async def upsert_repo_edges(
+        self, edges: Iterable[tuple[str, str, float]], *, host: str = "github"
+    ) -> int:
+        """(src_full_name, dst_full_name, weight) -> kind=0 edges.
+
+        Takes repository names because deps.dev resolves packages to projects
+        inside BigQuery now. The package-keyed `upsert_edges` still exists for
+        the `package` table, but the edge path no longer depends on that join
+        being correct on our side.
+        """
+        rows = list(edges)
+        if not rows:
+            return 0
+        written = 0
+        async with self.pool.acquire() as conn, conn.transaction():
+            # Chunked: 2M+ rows in one executemany builds an enormous parameter
+            # list in the driver and can outlive the statement timeout.
+            for start in range(0, len(rows), 10_000):
+                chunk = rows[start:start + 10_000]
+                await conn.executemany(
+                    """
+                    INSERT INTO edge (src, dst, kind, weight)
+                    SELECT rs.id, rd.id, 0, $3
+                    FROM repo rs, repo rd
+                    WHERE rs.host = $4 AND rs.full_name = $1
+                      AND rd.host = $4 AND rd.full_name = $2
+                      AND rs.id <> rd.id
+                    ON CONFLICT (src, dst, kind) DO UPDATE SET weight = EXCLUDED.weight
+                    """,
+                    [(s, d, float(w), host) for s, d, w in chunk],
+                )
+                written += len(chunk)
+        return written
+
+    async def package_repo_map(self) -> list[tuple[str, str, str]]:
+        """(ecosystem, package_name, repo_full_name) for every mapped package.
+
+        This is the 1.4 TiB deps.dev scan, already paid for and persisted. The
+        edge query uploads it back to BigQuery rather than re-deriving it.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT p.ecosystem, p.name, r.full_name "
+                "FROM package p JOIN repo r ON r.id = p.repo_id "
+                "WHERE p.repo_id IS NOT NULL"
+            )
+        return [(r["ecosystem"], r["name"], r["full_name"]) for r in rows]
+
+    async def repo_name_case_map(self, *, host: str = "github") -> dict[str, str]:
+        """lowercase full_name -> stored full_name.
+
+        deps.dev stores `ProjectName` in its own casing and GitHub's API returns
+        another. Joining on the raw strings drops every repository whose owner
+        capitalises differently — silently, as missing edges rather than an
+        error.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT full_name FROM repo WHERE host = $1", host)
+        return {r["full_name"].lower(): r["full_name"] for r in rows}
+
+    async def edge_counts(self) -> dict[str, int]:
+        """Edges by kind, and how many repositories have any at all.
+
+        This exists because it was missing, and its absence let a globe with
+        ZERO edges pass `gitglobe status` while the TypeScript verifier caught
+        it. PageRank over an empty graph returns 1/n for every node — it sums
+        to 1, every rank is positive, and every consistency check passes. The
+        only symptom is `max/min = 1x`. A status command that cannot see the
+        edge table cannot see the most consequential thing about the graph.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT kind, count(*) AS n FROM edge GROUP BY kind")
+            by_kind = {int(r["kind"]): int(r["n"]) for r in rows}
+            connected = await conn.fetchval(
+                "SELECT count(DISTINCT id) FROM ("
+                "  SELECT src AS id FROM edge WHERE kind IN (0, 2)"
+                "  UNION SELECT dst FROM edge WHERE kind IN (0, 2)) t"
+            )
+            packages = await conn.fetchval("SELECT count(*) FROM package WHERE repo_id IS NOT NULL")
+            stars = await conn.fetchval("SELECT count(*) FROM star_event")
+        return {
+            "depends_on": by_kind.get(0, 0),
+            "similar_to": by_kind.get(1, 0),
+            "used_with": by_kind.get(2, 0),
+            "rankable_edges": by_kind.get(0, 0) + by_kind.get(2, 0),
+            "connected_repos": int(connected or 0),
+            "mapped_packages": int(packages or 0),
+            "star_events": int(stars or 0),
+        }
+
+    async def upsert_star_events(self, events: Iterable[tuple[str, str, Any]], *, host: str = "github") -> int:
+        """(full_name, actor, starred_at). Raw events, not pairs.
+
+        Kept raw so the PPMI parameters can be retuned without re-querying
+        BigQuery, which is the expensive half by orders of magnitude.
+        """
+        rows = list(events)
+        if not rows:
+            return 0
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
+                INSERT INTO star_event (actor, repo_id, starred_at)
+                SELECT $2, r.id, $3 FROM repo r
+                WHERE r.host = $4 AND r.full_name = $1
+                ON CONFLICT (actor, repo_id) DO NOTHING
+                """,
+                [(name, actor, at, host) for name, actor, at in rows],
+            )
+        return len(rows)
+
+    async def star_baskets(self, min_size: int = 2, max_size: int = 400) -> list[list[str]]:
+        """One basket of repository names per actor.
+
+        Bounded on both ends in SQL rather than in Python: an actor who starred
+        5,000 repositories is browsing, not choosing, and would alone contribute
+        12.5 million pairs to the co-occurrence count.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT array_agg(r.full_name) AS items
+                FROM star_event s JOIN repo r ON r.id = s.repo_id
+                GROUP BY s.actor
+                HAVING count(*) BETWEEN $1 AND $2
+                """,
+                min_size, max_size,
+            )
+        return [list(r["items"]) for r in rows]
+
+    async def replace_used_with_edges(
+        self, pairs: Iterable[tuple[str, str, float, float]], *, host: str = "github"
+    ) -> int:
+        """(name_a, name_b, ppmi, observations) -> kind=2 edges, both directions.
+
+        Written symmetrically because `used_with` has no direction — "people who
+        use A also use B" is the same fact as its converse — and the CSR builder
+        would otherwise record a direction bit that means nothing.
+        """
+        rows = list(pairs)
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute("DELETE FROM edge WHERE kind = 2")
+            if not rows:
+                return 0
+            await conn.executemany(
+                """
+                INSERT INTO edge (src, dst, kind, weight, ppmi, observations)
+                SELECT ra.id, rb.id, 2, $3, $3, $4
+                FROM repo ra, repo rb
+                WHERE ra.host = $5 AND ra.full_name = $1
+                  AND rb.host = $5 AND rb.full_name = $2
+                  AND ra.id <> rb.id
+                ON CONFLICT (src, dst, kind) DO UPDATE
+                  SET weight = EXCLUDED.weight, ppmi = EXCLUDED.ppmi,
+                      observations = EXCLUDED.observations
+                """,
+                [(a, b, w, int(n), host) for a, b, w, n in rows]
+                + [(b, a, w, int(n), host) for a, b, w, n in rows],
+            )
+        return len(rows)
+
+    async def phase2_report(self) -> dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            return dict(await conn.fetchrow(
+                """
+                SELECT
+                  count(*)                                              AS repos,
+                  count(*) FILTER (WHERE NOT low_signal)                AS embeddable,
+                  count(embedding)                                      AS embedded,
+                  count(*) FILTER (WHERE embedded_hash IS DISTINCT FROM content_hash
+                                     AND NOT low_signal
+                                     AND embedding_input IS NOT NULL)   AS stale,
+                  count(theta)                                          AS projected,
+                  count(domain)                                         AS with_domain,
+                  count(*) FILTER (WHERE cluster_id >= 0)               AS clustered,
+                  count(DISTINCT cluster_id) FILTER (WHERE cluster_id >= 0) AS clusters
+                FROM repo
+                """
+            ))

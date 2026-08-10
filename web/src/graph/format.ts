@@ -35,7 +35,23 @@ export const GRAPH_HEADER_BYTES = 24;
 
 /** Weight field: high bit marks the edge as outgoing from the row's node. */
 export const WEIGHT_OUTGOING = 0x8000;
-export const WEIGHT_MASK = 0x7fff;
+/**
+ * Bits 13-14: edge kind. Must match KIND_SHIFT / KIND_MASK in
+ * pipeline/src/gitglobe/tiles/format.py — the cross-language format test is
+ * what keeps the two from drifting.
+ */
+export const KIND_SHIFT = 13;
+export const KIND_MASK = 0x6000;
+export const WEIGHT_MASK = 0x1fff;
+
+/** Edge kinds, matching `edge.kind` in migration 002. */
+export const EDGE_DEPENDS_ON = 0;
+export const EDGE_SIMILAR_TO = 1;
+export const EDGE_USED_WITH = 2;
+
+export function edgeKind(weight: number): number {
+  return (weight & KIND_MASK) >> KIND_SHIFT;
+}
 
 export interface GraphHeader {
   nodeCount: number;

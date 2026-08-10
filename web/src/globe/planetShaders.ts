@@ -1,19 +1,33 @@
 /**
- * Ice-giant surface generation — baked once into an equirectangular texture.
+ * Nebula surface generation — baked once into an equirectangular texture.
  *
- * The globe is an ice giant, not a terrestrial world. Neptune's character comes
- * from latitudinal banding, methane cirrus riding above it, and a handful of
- * dark storm ovals — and critically from LOW contrast between those bands.
- * Crank the contrast and you get a beach ball.
+ * The globe was an ice giant: latitudinal banding, methane cirrus, dark storm
+ * ovals, lit from one side. It is now an emission nebula, which is a different
+ * object in the two ways that drive every line below.
  *
- * ## Geography on a gas giant
+ * **It has no preferred axis.** A gas giant's entire character comes from
+ * latitude — bands, zones, belts, polar hood. Every one of those is a function
+ * of `lat`, and none of them survives here. A nebula is shaped by turbulence,
+ * so structure comes from domain-warped noise instead: the sampling coordinate
+ * is displaced by noise before being read, which is what produces sinuous
+ * curdled filaments rather than stripes.
  *
- * There is no land, so a territory cannot be a continent. It is a persistent
- * weather system: each domain owns a great cloud mass, tinted within the
- * blue-violet family, sitting inside the banding. The strongest clusters get a
- * storm vortex at their centre, the way the Great Dark Spot sits in a belt.
+ * **It emits rather than reflects.** There is no albedo and no terminator. The
+ * alpha channel is no longer a night-only aurora but omnidirectional emission,
+ * and `Backdrop` holds the sun term down to a weak modelling cue so the sphere
+ * still reads as a sphere.
  *
- * Sectors are still legible, but the planet reads as one body.
+ * ## Geography in a nebula
+ *
+ * A territory cannot be a continent or a weather system. It is a star-forming
+ * core: gas concentrates where a domain's clusters are, and denser gas is
+ * hotter and brighter. The `potential` field driving this is unchanged from the
+ * banded version, so territories sit in exactly the same places — only their
+ * expression changed.
+ *
+ * Ridged noise is what separates this from fog. Folding fBm at zero with
+ * 1 - |n| turns every zero crossing into a sharp crest; those crests are the
+ * filaments. Plain fBm gives clouds, and clouds do not read as a nebula.
  *
  * ## Why bake
  *
@@ -122,11 +136,13 @@ ${NOISE}
   const float PI  = 3.141592653589793;
   const float TAU = 6.283185307179586;
 
-  // Longitude shear as a function of latitude. Real gas giants rotate faster at
-  // the equator than the poles, and that differential is what drags features
-  // into the long swirls Neptune is known for.
-  float shearAt(float lat) {
-    return (1.0 - lat * lat) * 1.35 - 0.55;
+  // Ridged noise. Ordinary fBm gives soft clouds; folding it at zero with
+  // 1 - |n| turns every zero crossing into a sharp crest, and those crests are
+  // the filaments that make a nebula read as a nebula rather than as fog.
+  // Cubing sharpens them further and pushes the space between them to black.
+  float ridge(float n) {
+    float r = 1.0 - abs(n);
+    return r * r * r;
   }
 
   void main() {
@@ -138,12 +154,18 @@ ${NOISE}
     vec3 dir = vec3(-cos(phi) * st, cos(theta), sin(phi) * st);
     float lat = dir.y;
 
-    // Sheared sampling position. Everything downstream reads from 'flow' rather
-    // than 'dir', so bands, cirrus and storms all get dragged by the same
-    // differential rotation and stay coherent with each other.
-    float shear = shearAt(lat);
-    float sphi = phi + shear;
-    vec3 flow = vec3(-cos(sphi) * st, lat, sin(sphi) * st);
+    // Domain-warped sampling position: the coordinate is displaced by noise
+    // before being read. A gas giant's features are dragged into bands by
+    // differential rotation, so the old code sheared by latitude. A nebula has
+    // no rotation and no preferred axis - it is shaped by turbulence, and
+    // warping the coordinate is what produces the curdled, sinuous structure
+    // that latitude shear cannot express.
+    vec3 warp = vec3(
+      fbm3(dir * 1.30 + uSeed),
+      fbm3(dir * 1.30 + uSeed + 11.0),
+      fbm3(dir * 1.30 + uSeed + 23.0)
+    );
+    vec3 flow = dir * 2.15 + warp * 0.60;
 
     // ---- territory: great cloud systems ------------------------------------
     float potential = 0.0;
@@ -160,72 +182,68 @@ ${NOISE}
       if (d > nearest) { nearest = d; domain = uClusters[i].w; }
     }
 
-    // ---- banding -----------------------------------------------------------
-    // Turbulence perturbs the band coordinate rather than the colour. Perturbing
-    // colour gives noise laid over stripes; perturbing the coordinate makes the
-    // bands themselves wander, which is what atmospheres actually do.
-    float turb = fbm5(flow * 2.1 + uSeed) * 0.30
-               + fbm3(flow * 5.4 + uSeed * 1.7) * 0.10;
-    float bandCoord = lat * 6.5 + turb * 2.4;
-    float band = sin(bandCoord * PI);
+    // ---- the medium --------------------------------------------------------
+    // Two ridged octaves for filaments, plus a smooth low-frequency term for
+    // where the gas is simply piled up. Filaments alone look like cracked
+    // glaze; the smooth term gives them something to sit in.
+    float fil = ridge(fbm5(flow)) * 0.66
+              + ridge(fbm3(flow * 2.60 + uSeed)) * 0.34;
+    float cloud = fbm5(dir * 1.55 + uSeed * 1.3) * 0.5 + 0.5;
 
-    // Asymmetric: zones (bright, rising gas) are narrower than belts (dark).
-    float zone = smoothstep(-0.10, 0.85, band);
-    float deepBelt = smoothstep(0.35, -0.75, band);
+    // No additive floor. An earlier version added cloud * 0.26 unconditionally,
+    // which filled the voids and left the whole sphere emitting - 79% of it
+    // above the glow threshold, against a 12% budget. A nebula is mostly empty;
+    // the dark is what the filaments are legible against.
+    float density = clamp(fil * (0.30 + 0.95 * cloud), 0.0, 1.0);
+    // S-curve: darkens the mid-tones and keeps the crests, which widens the
+    // gap between void and filament rather than raising everything together.
+    density = density * density * (3.0 - 2.0 * density);
 
-    vec3 albedo = mix(uMid, uLight, zone);
-    albedo = mix(albedo, uDeep, deepBelt * 0.85);
-    // A thin pale crown at the very top of the brightest zones.
-    albedo = mix(albedo, uPale, smoothstep(0.80, 0.99, band) * 0.55);
+    // ---- territory ---------------------------------------------------------
+    // A domain's cluster is a star-forming core: gas concentrates there. This
+    // is the same 'potential' the banding used, so territories stay in exactly
+    // the same places - only their expression changes.
+    float territory = smoothstep(0.18, 1.30, potential);
+    density = clamp(density + territory * 0.18, 0.0, 1.0);
 
-    // ---- territory tint ----------------------------------------------------
     // Dynamic indexing of a uniform array is illegal in ES 1.00 fragment
     // shaders, so the domain tint is selected by masked accumulation.
     vec3 tint = vec3(0.0);
     for (int i = 0; i < 12; i++) {
       tint += uDomainTint[i] * step(abs(float(i) - domain), 0.5);
     }
-    // Restraint. Territories shift the band colour; they never replace it. The
-    // moment the surface competes with the nodes, the map stops being readable.
-    float territory = smoothstep(0.18, 1.30, potential);
-    albedo = mix(albedo, albedo * 0.45 + tint * 0.55, territory * 0.62);
 
-    // ---- storms ------------------------------------------------------------
-    // Dark ovals where a territory is strongest, stretched in longitude by the
-    // same shear. Bright companion cloud on the leading edge, exactly as on
-    // Neptune's Great Dark Spot.
-    float stormMask = smoothstep(0.85, 1.9, potential);
-    float swirl = fbm3(flow * 7.5 + uSeed * 2.3);
-    float storm = stormMask * smoothstep(-0.25, 0.35, swirl);
-    albedo = mix(albedo, uStorm, storm * 0.80);
-    float companion = stormMask * smoothstep(0.30, 0.62, swirl) * (1.0 - storm);
-    albedo = mix(albedo, uCirrus, companion * 0.55);
+    // ---- dust lanes --------------------------------------------------------
+    // Dust does not glow, it OCCLUDES - the dark rifts in a nebula are the
+    // foreground, not gaps. So it is applied last and it subtracts from
+    // emission rather than adding a dark colour. Thresholded hard, because
+    // real dust lanes have edges.
+    float dust = smoothstep(0.44, 0.78, fbm3(dir * 2.85 + uSeed * 2.1) * 0.5 + 0.5);
 
-    // ---- methane cirrus ----------------------------------------------------
-    // Sampled with latitude scaled up, which stretches the noise into long
-    // longitudinal streaks. Thresholded high so it stays wispy.
-    vec3 cirrusP = vec3(flow.x * 3.4, lat * 26.0, flow.z * 3.4) + uSeed;
-    float cirrus = fbm3(cirrusP) + fbm3(cirrusP * 2.7) * 0.4;
-    cirrus = smoothstep(0.14, 0.46, cirrus);
-    // Densest in the mid latitudes, as on Neptune — thin at the equator, gone
-    // at the poles.
-    cirrus *= smoothstep(0.02, 0.35, abs(lat)) * smoothstep(0.97, 0.72, abs(lat));
-    albedo = mix(albedo, uCirrus, cirrus * 0.55);
+    // ---- emission colour ---------------------------------------------------
+    // Hotter where denser, the way ionisation tracks proximity to the exciting
+    // stars: void -> base gas -> mid emission -> hot core.
+    vec3 gas = mix(uDeep, uMid, smoothstep(0.00, 0.42, density));
+    gas = mix(gas, uLight, smoothstep(0.38, 0.78, density));
+    gas = mix(gas, uPale, smoothstep(0.82, 0.99, density) * 0.75);
 
-    // ---- polar hood --------------------------------------------------------
-    // A brighter cap, softly edged. Not ice — high-altitude haze.
-    float hood = smoothstep(0.72, 0.99, abs(lat) + turb * 0.10);
-    albedo = mix(albedo, mix(uPale, uCirrus, 0.35), hood * 0.55);
+    // Territory recolours the gas. Restraint is still the rule from the banded
+    // version: a hundred thousand nodes have to stay the brightest things on
+    // screen, so the medium is tinted, never saturated.
+    gas = mix(gas, gas * 0.42 + tint * 0.78, territory * 0.66);
 
-    // ---- night-side emissive ----------------------------------------------
-    // Aurora at the poles plus a glow in the storm cores. Without this the dark
-    // limb is a dead black crescent and the planet looks bitten into.
-    // Poles and storm cores ONLY. Feeding 'territory' in here was a mistake:
-    // territories cover most of the planet, so the entire night side lit up
-    // like a lamp instead of showing a thin aurora against the dark.
-    float aurora = smoothstep(0.86, 0.995, abs(lat)) * (0.35 + 0.65 * fbm3(flow * 9.0 + uSeed));
-    float glow = clamp(aurora * 0.95 + storm * 0.12, 0.0, 1.0);
+    // Ionisation fronts: the bright rims where a filament crest faces the
+    // radiation. Narrow, or the whole field turns white.
+    gas = mix(gas, uCirrus, smoothstep(0.82, 0.99, fil) * 0.30);
 
-    gl_FragColor = vec4(albedo, glow);
+    gas = mix(gas, uStorm, dust * 0.58);
+
+    // ---- emission ----------------------------------------------------------
+    // A nebula is self-luminous, so unlike the ice giant's aurora this is not
+    // a night-only term - Backdrop reads it as omnidirectional emission and
+    // holds the sun term down to a slight modelling cue. Dust cuts it.
+    float glow = clamp(density * (1.0 - dust * 0.75) * 0.58, 0.0, 1.0);
+
+    gl_FragColor = vec4(gas, glow);
   }
 `;

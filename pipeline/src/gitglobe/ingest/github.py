@@ -333,7 +333,16 @@ class GitHubIngest:
         """
         seen = 0
         cursor = after
-        while seen < limit:
+        # Power of 10 rule 2. `seen < limit` only terminates if `seen` grows,
+        # and it does not when the API returns an empty page — which it can do
+        # under load while still reporting `hasNextPage`. Without a page cap
+        # that is an unbounded loop against a rate-limited paid API.
+        # SEARCH_RESULT_CAP/page_size is the most pages that can ever be useful.
+        pages = 0
+        max_pages = max(1, -(-limit // max(1, self.page_size))) + 2
+
+        while seen < limit and pages < max_pages:
+            pages += 1
             data = await self._post(build_search_query(self.page_size), {"q": query, "after": cursor})
             search = data["search"]
             nodes = [n for n in search["nodes"] if n]

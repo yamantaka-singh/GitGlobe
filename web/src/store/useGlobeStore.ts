@@ -99,7 +99,7 @@ export const useGlobeStore = create<GlobeState>((set) => ({
   anchor: { x: 0, y: 0, visible: false },
 
   tier: 'high',
-  sizeScale: 32,
+  sizeScale: 18,
   autoRotate: true,
   reducedMotion: false,
   showAmbientArcs: true,

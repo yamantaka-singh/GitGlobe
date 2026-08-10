@@ -240,7 +240,23 @@ def _drop_stop_sections(text: str) -> tuple[str, list[str]]:
     skip_until_level: int | None = None
     i = 0
 
+    # Power of 10 rule 2. `i < len(lines)` is only a bound if `i` strictly
+    # increases on every path, and this loop has several. A parser that fails
+    # to advance on one branch spins forever on one unusual README — silently,
+    # inside a 100k-row ingest, indistinguishable from a slow network.
+    # `_guard` makes the bound explicit and costs one integer compare.
+    _guard = 0
+    _guard_limit = 2 * len(lines) + 8
+    previous_i = -1
+
     while i < len(lines):
+        _guard += 1
+        if _guard > _guard_limit or i <= previous_i:
+            raise RuntimeError(
+                f"section parser failed to advance at line {i} "
+                f"(pass {_guard}). This is a parser bug, not bad input."
+            )
+        previous_i = i
         heading = _heading_of(lines, i)
         if heading is not None:
             level, title = heading

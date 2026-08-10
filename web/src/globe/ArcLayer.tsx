@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 import { ARC_FRAG, ARC_VERT } from './arcShaders';
+import { ARC_KIND_COLOR } from './palette';
 import { useGlobeStore } from '../store/useGlobeStore';
 
 const SEGMENTS = 20;
@@ -17,6 +18,11 @@ export interface ArcEndpoints {
   weight: number;
   nodeA: number;
   nodeB: number;
+  /**
+   * Relationship type: 0=depends_on, 1=similar_to, 2=used_with. Drives the
+   * arc's colour, so a link's appearance says what kind of link it is.
+   */
+  kind?: number;
 }
 
 export interface ArcStyle {
@@ -121,6 +127,9 @@ export class ArcPool {
         uFocusNode: { value: -1 },
         uFocusBoost: { value: style.focusBoost },
         uColor: { value: style.color.clone() },
+        uKindColor: {
+          value: ARC_KIND_COLOR.map(([r, g, b]) => new THREE.Vector3(r, g, b)),
+        },
         uPulseColor: { value: style.pulseColor.clone() },
         uFocusColor: { value: style.focusColor.clone() },
         uBaseAlpha: { value: style.baseAlpha },
@@ -149,9 +158,15 @@ export class ArcPool {
     const nd = this.nodes.array as Float32Array;
 
     for (let arc = 0; arc < n; arc++) {
-      const { a, b, weight, nodeA, nodeB } = arcs[arc];
+      const { a, b, weight, nodeA, nodeB, kind = 0 } = arcs[arc];
       // A stable per-arc phase, so pulses don't march in lockstep. Derived from
       // the node ids rather than random, so it survives a re-render unchanged.
+      //
+      // Kind rides in the INTEGER part of the same float. Phase is [0,1) by
+      // construction, so kind + phase is exactly recoverable with floor/fract,
+      // and it avoids widening aMeta to a vec3 — which would mean reallocating
+      // the buffer, changing itemSize in three places, and touching the upload
+      // range arithmetic, all to carry two bits.
       const phase = ((nodeA * 2654435761 + nodeB * 40503) % 1000) / 1000;
       const vBase = arc * VERTS_PER_ARC;
       for (let v = vBase; v < vBase + VERTS_PER_ARC; v++) {
@@ -162,7 +177,7 @@ export class ArcPool {
         eb[v * 3 + 1] = b.y;
         eb[v * 3 + 2] = b.z;
         me[v * 2] = weight;
-        me[v * 2 + 1] = phase;
+        me[v * 2 + 1] = kind + phase;
         nd[v * 2] = nodeA;
         nd[v * 2 + 1] = nodeB;
       }

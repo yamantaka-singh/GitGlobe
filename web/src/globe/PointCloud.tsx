@@ -66,7 +66,7 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
 
     const shared = {
       uRadius: { value: radius },
-      uSizeScale: { value: 32 },
+      uSizeScale: { value: 18 },
       uPixelRatio: { value: Math.min(gl.getPixelRatio(), 2) },
       // Slightly past the true limb so points fade out rather than vanish.
       uCullBias: { value: -0.06 },
@@ -78,8 +78,9 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
         uPalette: { value: palette },
         uHoverIndex: { value: -1 },
         uDimLowSignal: { value: 0.32 },
-        // Nodes above this normalised size get a containment ring.
-        uHubThreshold: { value: 0.62 },
+        // How much rank widens a node's bloom. Continuous: there is no
+        // threshold, so no node ever crosses a line and changes appearance.
+        uHubGain: { value: 0.8 },
         uDomainFilter: { value: -1 },
         uSunDir: { value: SUN_DIR.clone() },
         uNightDim: { value: 0.42 },
@@ -99,7 +100,7 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
         // Separate uniform objects: sharing them would couple the two passes'
         // pixel ratio, and the pick target is always 1:1.
         uRadius: { value: radius },
-        uSizeScale: { value: 32 },
+        uSizeScale: { value: 18 },
         uPixelRatio: { value: Math.min(gl.getPixelRatio(), 2) },
         uCullBias: { value: -0.06 },
         // 2.5px, down from 5. Every extra pixel of hit padding is another pixel

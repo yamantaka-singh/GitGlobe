@@ -11,7 +11,8 @@
  *                                                from it — see PointCloud)
  *   aEndB     vec3   endpoint B, unit vector
  *   aParams   vec2   (t along arc 0..1, side -1/+1)
- *   aMeta     vec2   (weight 0..1, phase 0..1)
+ *   aMeta     vec2   (weight 0..1, kind + phase — integer part is the
+ *                        edge kind, fraction is the pulse phase)
  *   aNodes    vec2   (global id of A, global id of B)
  *
  * The ribbon is expanded in world space perpendicular to both the arc tangent
@@ -42,6 +43,7 @@ export const ARC_VERT = /* glsl */ `
   varying float vFocus;
   varying float vEdge;
   varying float vFacing;
+  varying float vKind;
 
   const float PI = 3.141592653589793;
 
@@ -102,7 +104,9 @@ export const ARC_VERT = /* glsl */ `
     vFocus = max(focusA, focusB) * uFocusBoost;
 
     // Travelling pulse: a gaussian bump chasing 't' around the wire.
-    float head = fract(uTime * uPulseSpeed + aMeta.y);
+    // aMeta.y packs kind in the integer part and phase in the fraction.
+    vKind = floor(aMeta.y);
+    float head = fract(uTime * uPulseSpeed + fract(aMeta.y));
     float d = t - head;
     d -= floor(d + 0.5);                      // wrap into [-0.5, 0.5]
     vPulse = exp(-(d * d) / (uPulseWidth * uPulseWidth));
@@ -115,6 +119,7 @@ export const ARC_FRAG = /* glsl */ `
   precision mediump float;
 
   uniform vec3  uColor;
+  uniform vec3  uKindColor[3];
   uniform vec3  uPulseColor;
   uniform vec3  uFocusColor;
   uniform float uBaseAlpha;
@@ -125,6 +130,7 @@ export const ARC_FRAG = /* glsl */ `
   varying float vFocus;
   varying float vEdge;
   varying float vFacing;
+  varying float vKind;
 
   void main() {
     // Soft edges across the ribbon's width — a hard-edged quad reads as a
@@ -145,7 +151,17 @@ export const ARC_FRAG = /* glsl */ `
     float alpha = (base + pulse) * profile * limb;
     if (alpha < 0.003) discard;
 
-    vec3 rgb = mix(uColor, uPulseColor, clamp(vPulse, 0.0, 1.0));
+    // Colour by relationship type. Every arc used to be one colour, so the
+    // wires said "these two repos are connected" and nothing more — the single
+    // most information-free channel on the globe. Dynamic indexing of a uniform
+    // array is illegal in ES 1.00 fragment shaders, so this is the same masked
+    // accumulation the domain tint uses in BAKE_FRAG.
+    vec3 kindColor = vec3(0.0);
+    for (int i = 0; i < 3; i++) {
+      kindColor += uKindColor[i] * step(abs(float(i) - vKind), 0.5);
+    }
+
+    vec3 rgb = mix(kindColor, uPulseColor, clamp(vPulse, 0.0, 1.0));
     rgb = mix(rgb, uFocusColor, clamp(vFocus, 0.0, 1.0) * 0.75);
 
     gl_FragColor = vec4(rgb, alpha);
