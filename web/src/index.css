@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
 :root {
   /* Sampled from the reference: black space, periwinkle atmosphere, violet
      scatter, amber city lights. No cyan anywhere — that was the tell that the
@@ -14,11 +16,21 @@
   --amber: #ff9c47;  /* city lights */
   --fail: #ff6b6b;
 
-  /* Editorial sans for names and headlines, mono strictly for telemetry. The
-     contrast between the two is most of what separates "designed" from "debug
-     panel" — a monospace-only interface always reads as a terminal. */
-  --sans: "Helvetica Neue", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* Design System Tokens */
+  --color-primary: #0F172A;
+  --color-on-primary: #FFFFFF;
+  --color-secondary: #1E293B;
+  --color-accent: #22C55E;
+  --color-background: #020617;
+  --color-foreground: #F8FAFC;
+  --color-muted: #1A1E2F;
+  --color-border: #334155;
+  --color-destructive: #EF4444;
+  --color-ring: #0F172A;
+
+  /* Editorial sans for names and headlines, mono strictly for telemetry. */
+  --sans: "Fira Sans", "Helvetica Neue", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: "Fira Code", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
 
@@ -194,6 +206,7 @@ button:focus-visible {
   font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.02em;
+  color: var(--color-accent);
 }
 
 .tabs {
@@ -213,18 +226,20 @@ button:focus-visible {
   padding: 5px 11px 7px;
   font-size: 12px;
   white-space: nowrap;
-  color: var(--muted);
+  color: rgba(110, 139, 232, 0.7);
   border-bottom: 1px solid transparent;
-  transition: color 130ms, border-color 130ms;
+  transition: color 130ms, border-color 130ms, text-shadow 130ms;
 }
 
 .tabs button:hover {
   color: var(--text);
+  text-shadow: 0 0 8px rgba(110, 139, 232, 0.5);
 }
 
 .tabs button.is-active {
   color: var(--text);
   border-bottom-color: var(--cyan);
+  text-shadow: 0 0 10px rgba(110, 139, 232, 0.8);
 }
 
 .topbar__toggle {
@@ -604,4 +619,227 @@ button:focus-visible {
   .intro {
     transition-duration: 1ms;
   }
+}
+
+/* ---------------------------------------------------------------- detail panel */
+
+.detail-panel {
+  position: absolute;
+  right: clamp(16px, 3vw, 34px);
+  top: 76px;
+  width: 320px;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+  font-family: var(--sans);
+  color: #FFFFFF;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-panel__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  font-size: 20px;
+  line-height: 1;
+  color: #94A3B8;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 150ms, background 150ms;
+}
+
+.detail-panel__close:hover {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.detail-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-panel__header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.detail-panel__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #FFFFFF;
+  word-break: break-word;
+}
+
+.detail-panel__org {
+  margin-top: -12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #94A3B8;
+}
+
+.detail-panel__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #E2E8F0;
+}
+
+.detail-panel__meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meta-icon {
+  font-size: 14px;
+}
+
+.detail-panel__stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid #334155;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-panel__stats dt {
+  color: #94A3B8;
+}
+
+.detail-panel__stats dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 500;
+  color: #FFFFFF;
+}
+
+.detail-panel__link {
+  margin-top: 8px;
+  padding: 10px;
+  text-align: center;
+  background: #1E293B;
+  color: #4ADE80;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  transition: background 150ms, border-color 150ms, color 150ms;
+}
+
+.detail-panel__link:hover {
+  background: #334155;
+  color: #22C55E;
+  border-color: #4ADE80;
+}
+
+@media (max-width: 860px) {
+  .detail-panel {
+    top: auto;
+    bottom: 24px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}
+
+/* ---------------------------------------------------------------- search */
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-box__input {
+  width: 200px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  transition: border-color 150ms, width 200ms;
+  outline: none;
+}
+
+.search-box__input:focus {
+  width: 280px;
+  border-color: var(--cyan);
+}
+
+.search-box__results {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--color-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  pointer-events: auto;
+}
+
+.search-box__msg {
+  padding: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+}
+
+.search-box__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.search-box__list button {
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  transition: background 150ms;
+}
+
+.search-box__list button:hover {
+  background: var(--color-secondary);
+}
+
+.search-box__list button:last-child {
+  border-bottom: none;
+}
+
+.search-box__list .repo-name {
+  font-weight: 500;
+  color: var(--color-on-primary);
 }

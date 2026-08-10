@@ -13,7 +13,7 @@ import { Benchmark } from '../bench/Benchmark';
 import { useDeviceTier, TIER_BUDGET } from '../perf/useDeviceTier';
 import { fetchBand, fetchManifest, type LoadedBand, type TileManifest } from '../tile/loader';
 import { fetchGraph, sortedRanks } from '../graph/loader';
-import { neighboursOf, type RepoGraph } from '../graph/format';
+import { neighboursOf, type RepoGraph, EDGE_SIMILAR_TO } from '../graph/format';
 import { dequantisePhi, dequantiseTheta } from '../tile/format';
 import { useGlobeStore } from '../store/useGlobeStore';
 
@@ -178,6 +178,7 @@ export function Scene() {
         weight: 1 - i / limit,
         nodeA,
         nodeB,
+        kind: -1,
       });
     }
 
@@ -209,15 +210,19 @@ export function Scene() {
       const arcs: ArcEndpoints[] = [];
       const origin = a.clone();
       for (const n of neighbours) {
+        if (n.kind === EDGE_SIMILAR_TO) continue;
         if (!sceneIndex.directionInto(n.node, b)) continue;
+
         arcs.push({
-          a: origin,
-          b: b.clone(),
+          a: n.outgoing ? origin : b.clone(),
+          b: n.outgoing ? b.clone() : origin,
           weight: 0.35 + 0.65 * (n.weight / 32767),
-          nodeA: focus,
-          nodeB: n.node,
+          nodeA: n.outgoing ? focus : n.node,
+          nodeB: n.outgoing ? n.node : focus,
+          kind: (n.kind === 0 && !n.outgoing) ? 3 : n.kind,
         });
       }
+      console.log('Focus arcs generated:', arcs.length);
       focusPool.setArcs(arcs);
       useGlobeStore.getState().setFocusArcCount(arcs.length);
     });

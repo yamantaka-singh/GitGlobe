@@ -19,5 +19,34 @@ services:
       timeout: 5s
       retries: 10
 
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: gitglobe-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - gitglobe-qdrantdata:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: gitglobe-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - gitglobe-redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   gitglobe-pgdata:
+  gitglobe-qdrantdata:
+  gitglobe-redisdata:

@@ -44,6 +44,8 @@ export const ARC_VERT = /* glsl */ `
   varying float vEdge;
   varying float vFacing;
   varying float vKind;
+  varying float vT;
+  varying float vMetaY;
 
   const float PI = 3.141592653589793;
 
@@ -97,6 +99,9 @@ export const ARC_VERT = /* glsl */ `
 
     vWeight = aMeta.x;
     vEdge = side;
+    vMetaY = aMeta.y;
+    vKind = floor(aMeta.y);
+    vT = t;
     vFacing = dot(normalize(p), viewDir);
 
     float focusA = step(abs(aNodes.x - uFocusNode), 0.5);
@@ -105,7 +110,6 @@ export const ARC_VERT = /* glsl */ `
 
     // Travelling pulse: a gaussian bump chasing 't' around the wire.
     // aMeta.y packs kind in the integer part and phase in the fraction.
-    vKind = floor(aMeta.y);
     float head = fract(uTime * uPulseSpeed + fract(aMeta.y));
     float d = t - head;
     d -= floor(d + 0.5);                      // wrap into [-0.5, 0.5]
@@ -119,11 +123,14 @@ export const ARC_FRAG = /* glsl */ `
   precision mediump float;
 
   uniform vec3  uColor;
-  uniform vec3  uKindColor[3];
+  uniform vec3  uKindColor[4];
   uniform vec3  uPulseColor;
   uniform vec3  uFocusColor;
   uniform float uBaseAlpha;
   uniform float uPulseGain;
+  uniform highp float uWidthPx;
+  uniform highp float uPulseSpeed;
+  uniform highp float uTime;
 
   varying float vWeight;
   varying float vPulse;
@@ -131,37 +138,69 @@ export const ARC_FRAG = /* glsl */ `
   varying float vEdge;
   varying float vFacing;
   varying float vKind;
+  varying float vMetaY;
+  varying float vT;
 
   void main() {
-    // Soft edges across the ribbon's width — a hard-edged quad reads as a
-    // rectangle, not a wire.
+    // Soft edges across the ribbon's width
     float across = clamp(1.0 - abs(vEdge), 0.0, 1.0);
-    // pow(across, 0.75) is very expensive. across * (2.0 - across) is a fast
-    // quadratic approximation that achieves the same soft profile visually.
     float profile = across * (2.0 - across);
 
-    // Arcs on the far limb fade rather than pop. The opaque core already
-    // occludes anything genuinely behind the globe.
+    // Arcs on the far limb fade rather than pop.
     float limb = smoothstep(-0.55, -0.1, vFacing);
 
     float weight = 0.3 + 0.7 * vWeight;
     float base = uBaseAlpha * weight * (1.0 + vFocus * 3.0);
-    float pulse = vPulse * uPulseGain * (0.4 + 0.6 * vFocus);
+    float alpha = base * profile * limb;
 
-    float alpha = (base + pulse) * profile * limb;
-    if (alpha < 0.003) discard;
+    float pixelDist = abs(vEdge) * (uWidthPx * 0.5);
+    float baseLineWidth = 1.0;
+    float shape = 1.0 - smoothstep(baseLineWidth - 0.5, baseLineWidth + 0.5, pixelDist);
+    float pulse = vPulse;
 
-    // Colour by relationship type. Every arc used to be one colour, so the
-    // wires said "these two repos are connected" and nothing more — the single
-    // most information-free channel on the globe. Dynamic indexing of a uniform
-    // array is illegal in ES 1.00 fragment shaders, so this is the same masked
-    // accumulation the domain tint uses in BAKE_FRAG.
-    vec3 kindColor = vec3(0.0);
-    for (int i = 0; i < 3; i++) {
-      kindColor += uKindColor[i] * step(abs(float(i) - vKind), 0.5);
+    // Kind 0 (outdegree): moving arrowhead
+    // Kind 3 (indegree): moving arrowhead
+    // Kind 2 (used_with): faint dashed
+    // Kind -1 (ambient): solid
+    if ((vKind > -0.5 && vKind < 0.5) || (vKind > 2.5 && vKind < 3.5)) {
+       float phase = fract(vMetaY);
+       float head = fract(uTime * uPulseSpeed + phase);
+       float d = vT - head;
+       d -= floor(d + 0.5);
+
+       float arrowLength = 0.06;
+       float maxArrowHalfWidth = uWidthPx * 0.5;
+       float arrowMask = 0.0;
+       
+       if (d <= 0.0 && d >= -arrowLength) {
+           float allowedWidth = (-d / arrowLength) * maxArrowHalfWidth;
+           arrowMask = 1.0 - smoothstep(allowedWidth - 0.5, allowedWidth + 0.5, pixelDist);
+           float backCut = smoothstep(-arrowLength - 0.005, -arrowLength + 0.005, d);
+           arrowMask *= backCut;
+       }
+       
+       shape = max(shape, arrowMask);
+       pulse = arrowMask;
+    } else if (vKind > 1.5 && vKind < 2.5) {
+       // kind 2
+       float dash = step(0.5, fract(vT * 30.0));
+       shape *= dash;
+       base *= 0.5; // faint
     }
 
-    vec3 rgb = mix(kindColor, uPulseColor, clamp(vPulse, 0.0, 1.0));
+    alpha *= shape;
+    if (alpha < 0.003) discard;
+
+    // Colour by relationship type.
+    vec3 kindColor = uColor;
+    if (vKind > -0.5) {
+      kindColor = vec3(0.0);
+      for (int i = 0; i < 4; i++) {
+        kindColor += uKindColor[i] * step(abs(float(i) - vKind), 0.5);
+      }
+    }
+
+    vec3 rgb = mix(kindColor, uPulseColor, clamp(pulse, 0.0, 1.0));
     rgb = mix(rgb, uFocusColor, clamp(vFocus, 0.0, 1.0) * 0.75);
 
     gl_FragColor = vec4(rgb, alpha);

@@ -155,8 +155,9 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
   }, [band, displayMaterial, pickMaterial, onReady, onDispose]);
 
   useFrame(() => {
-    const { hoveredId, sizeScale, activeDomain } = useGlobeStore.getState();
-    const local = hoveredId >= 0 ? hoveredId - band.idOffset : -1;
+    const { hoveredId, selectedId, sizeScale, activeDomain } = useGlobeStore.getState();
+    const focusId = selectedId >= 0 ? selectedId : hoveredId;
+    const local = focusId >= 0 ? focusId - band.idOffset : -1;
     const inThisBand = local >= 0 && local < band.tile.count;
     displayMaterial.uniforms.uHoverIndex.value = inThisBand ? local : -1;
     displayMaterial.uniforms.uSizeScale.value = sizeScale;
