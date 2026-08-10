@@ -49,7 +49,19 @@ FLAG_ARCHIVED = 1 << 1
 FLAG_FORK = 1 << 2
 
 WEIGHT_OUTGOING = 0x8000
-WEIGHT_MASK = 0x7FFF
+#: Bits 13-14 carry the edge kind, so arcs can be coloured by what the
+#: relationship IS rather than all rendering identically. The DB has had
+#: `edge.kind` since migration 002 (0=depends_on, 1=similar_to, 2=used_with);
+#: the tile builder simply discarded it, which is why every arc was one colour.
+#:
+#: Taking two bits from the weight drops it from 32,767 levels to 8,191. The
+#: weight is a normalised 0-1 ribbon opacity, so even 256 levels would be
+#: indistinguishable - this costs nothing real and avoids widening the array,
+#: which would change every downstream offset.
+KIND_SHIFT = 13
+KIND_MASK = 0x6000
+MAX_KIND = 3
+WEIGHT_MASK = 0x1FFF
 
 
 def quantise_theta(theta: np.ndarray) -> np.ndarray:
@@ -141,9 +153,14 @@ class GraphArrays:
     rank: np.ndarray  # float32[n]
     offsets: np.ndarray  # uint32[n+1]
     targets: np.ndarray  # uint32[e]
-    weights: np.ndarray  # uint16[e], bit15 = outgoing
+    weights: np.ndarray  # uint16[e], bit15 = outgoing, bits13-14 = kind
     ambient: np.ndarray  # uint32[2a], flat (src, dst) pairs
-    layout_version: int = 1
+    #: Bumped 1 -> 2 when kind moved into bits 13-14. A version-1 file used all
+    #: 15 low bits for weight, so reading one with a version-2 decoder yields
+    #: plausible-looking arcs in arbitrary colours — wrong, but not obviously
+    #: wrong. The reader rejects mismatched versions so a stale graph.bin fails
+    #: loudly instead of quietly lying.
+    layout_version: int = 2
 
     def validate(self) -> None:
         n = len(self.rank)
@@ -184,21 +201,72 @@ def encode_graph(graph: GraphArrays) -> bytes:
     return blob
 
 
+def pack_weight_and_kind(
+    weight: Sequence[float] | np.ndarray,
+    kind: Sequence[int] | np.ndarray | None,
+    count: int,
+) -> np.ndarray:
+    """Quantised weight in bits 0-12, edge kind in bits 13-14.
+
+    Split out of `build_undirected_csr` because adding kind support pushed that
+    function to 63 code lines, and the Power of 10 rule 4 check refused it. The
+    packing is a genuinely separable concern, so this is a better shape anyway.
+    """
+    w = np.clip(
+        np.asarray(weight, dtype=np.float64) * WEIGHT_MASK, 0, WEIGHT_MASK
+    ).astype(np.uint16)
+
+    if kind is None:
+        return w
+
+    k = np.asarray(kind, dtype=np.int64)
+    if len(k) != count:
+        raise ValueError(f"kind has {len(k)} entries, src has {count}")
+    # Rule 7. An out-of-range kind would silently overflow into the direction
+    # bit and reverse the arrow — corruption that still decodes and still
+    # renders, which is the worst kind.
+    if len(k) and (int(k.max()) > MAX_KIND or int(k.min()) < 0):
+        raise ValueError(
+            f"edge kind must be 0..{MAX_KIND}, got {int(k.min())}..{int(k.max())}"
+        )
+    return w | (k.astype(np.uint16) << KIND_SHIFT)
+
+
 def build_undirected_csr(
     n: int,
     src: Sequence[int] | np.ndarray,
     dst: Sequence[int] | np.ndarray,
     weight: Sequence[float] | np.ndarray,
+    kind: Sequence[int] | np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Directed edge list to undirected CSR, each edge in both rows.
 
     The renderer's only query is "everything this repository touches", which
     wants both directions available in one O(1) lookup. Direction survives in
-    the weight's high bit.
+    the weight's high bit, and the edge kind in bits 13-14.
+
+    `kind` defaults to zeros so existing callers keep working, but a caller that
+    HAS kinds and forgets to pass them gets a silently monochrome graph — so
+    `build.py` passes them explicitly.
     """
     src = np.asarray(src, dtype=np.uint32)
     dst = np.asarray(dst, dtype=np.uint32)
-    w = np.clip(np.asarray(weight, dtype=np.float64) * WEIGHT_MASK, 0, WEIGHT_MASK).astype(np.uint16)
+    w = pack_weight_and_kind(weight, kind, len(src))
+
+    # Power of 10 rule 7 — validate every parameter. Three parallel arrays, and
+    # a length mismatch here does NOT raise: `zip` stops at the shortest, so
+    # edges silently vanish and the CSR is quietly incomplete. An endpoint past
+    # `n` is worse — it writes into another node's row and corrupts the graph
+    # in a way that still decodes and still renders.
+    if not (len(src) == len(dst) == len(w)):
+        raise ValueError(
+            f"src/dst/weight lengths differ: {len(src)}, {len(dst)}, {len(w)}"
+        )
+    if len(src) and (int(src.max()) >= n or int(dst.max()) >= n):
+        raise ValueError(
+            f"edge endpoint out of range for {n} nodes "
+            f"(max src {int(src.max())}, max dst {int(dst.max())})"
+        )
 
     degree = np.zeros(n, dtype=np.uint32)
     np.add.at(degree, src, 1)

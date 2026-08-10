@@ -125,7 +125,14 @@ def combine_edges(
         return empty_i, empty_i, np.empty(0, np.float64)
 
     all_src, all_dst, all_w = [], [], []
-    for src, dst, weight, scale in layers:
+    for index, (src, dst, weight, scale) in enumerate(layers):
+        # Rule 7. Ragged layers concatenate without complaint and produce an
+        # edge list where src[i] and dst[i] come from different edges.
+        if not (len(src) == len(dst) == len(weight)):
+            raise ValueError(
+                f"layer {index}: src/dst/weight lengths differ "
+                f"({len(src)}, {len(dst)}, {len(weight)})"
+            )
         if len(src) == 0:
             continue
         w = np.asarray(weight, dtype=np.float64)
@@ -159,8 +166,14 @@ def importance_order(rank: np.ndarray, tiebreak: np.ndarray | None = None) -> np
     rank = np.asarray(rank, dtype=np.float64)
     if tiebreak is None:
         return np.argsort(-rank, kind="stable")
+    tiebreak = np.asarray(tiebreak, dtype=np.float64)
+    # Rule 7. `lexsort` broadcasts rather than failing on a length mismatch, so
+    # a short tiebreak silently reorders the wrong repositories — and node id
+    # IS rank position, so every downstream artifact inherits the error.
+    if len(tiebreak) != len(rank):
+        raise ValueError(f"tiebreak has {len(tiebreak)} entries, rank has {len(rank)}")
     # lexsort's LAST key is primary, so rank is passed last.
-    return np.lexsort((-np.asarray(tiebreak, dtype=np.float64), -rank))
+    return np.lexsort((-tiebreak, -rank))
 
 
 def to_display_size(rank: np.ndarray, tiebreak: np.ndarray | None = None) -> np.ndarray:
@@ -242,17 +255,35 @@ def banded_display_size(
     return size
 
 
-def _default_band_ranges(n_bands: int) -> list[tuple[float, float]]:
-    """Radius slice per band, widest at the top.
+#: No node may be smaller than this. The point shader computes
+#: `clamp(size * uSizeScale * pixelRatio / distance, 1.0, 28.0)`, so anything
+#: under roughly 0.10 collapses onto the 1-pixel floor and stops being a dot.
+#:
+#: This is not a cosmetic preference. Band 2 is 80% of the globe; when its
+#: range started at 0.0, most of the map rendered as sub-pixel specks the
+#: moment real PageRank arrived and spread the sizes out. Before that, every
+#: band-2 node shared one identical rank and therefore one comfortable size —
+#: the field looked *better* precisely because the data carried no information.
+#:
+#: A floor costs a little contrast at the bottom and buys the tail back.
+MIN_DISPLAY_SIZE = 0.17
 
-    Band 0 gets the most room because it is the layer that is always drawn and
-    always in focus; the tail shares a narrow slice because at that density the
-    eye reads position and colour, not radius.
+
+def _default_band_ranges(n_bands: int) -> list[tuple[float, float]]:
+    """Radius slice per band, widest at the top, floored so nothing vanishes.
+
+    Band 0 gets the most room because it is always drawn and always in focus.
+    The tail gets a narrower slice because at that density the eye reads
+    position and colour rather than radius — but the slice starts at
+    `MIN_DISPLAY_SIZE`, not at zero.
     """
     if n_bands <= 1:
-        return [(0.0, 1.0)]
-    presets = {2: [(0.45, 1.0), (0.0, 0.45)], 3: [(0.62, 1.0), (0.30, 0.62), (0.0, 0.30)]}
+        return [(MIN_DISPLAY_SIZE, 1.0)]
+    presets = {
+        2: [(0.52, 1.0), (MIN_DISPLAY_SIZE, 0.52)],
+        3: [(0.60, 1.0), (0.36, 0.60), (MIN_DISPLAY_SIZE, 0.36)],
+    }
     if n_bands in presets:
         return presets[n_bands]
-    edges = np.linspace(0.0, 1.0, n_bands + 1)[::-1]
+    edges = np.linspace(MIN_DISPLAY_SIZE, 1.0, n_bands + 1)[::-1]
     return [(float(edges[i + 1]), float(edges[i])) for i in range(n_bands)]

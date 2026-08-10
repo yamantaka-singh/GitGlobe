@@ -623,6 +623,167 @@ class Database:
             )
         return {r["full_name"].lower(): dict(r) for r in rows}
 
+    async def upsert_repo_edges(
+        self, edges: Iterable[tuple[str, str, float]], *, host: str = "github"
+    ) -> int:
+        """(src_full_name, dst_full_name, weight) -> kind=0 edges.
+
+        Takes repository names because deps.dev resolves packages to projects
+        inside BigQuery now. The package-keyed `upsert_edges` still exists for
+        the `package` table, but the edge path no longer depends on that join
+        being correct on our side.
+        """
+        rows = list(edges)
+        if not rows:
+            return 0
+        written = 0
+        async with self.pool.acquire() as conn, conn.transaction():
+            # Chunked: 2M+ rows in one executemany builds an enormous parameter
+            # list in the driver and can outlive the statement timeout.
+            for start in range(0, len(rows), 10_000):
+                chunk = rows[start:start + 10_000]
+                await conn.executemany(
+                    """
+                    INSERT INTO edge (src, dst, kind, weight)
+                    SELECT rs.id, rd.id, 0, $3
+                    FROM repo rs, repo rd
+                    WHERE rs.host = $4 AND rs.full_name = $1
+                      AND rd.host = $4 AND rd.full_name = $2
+                      AND rs.id <> rd.id
+                    ON CONFLICT (src, dst, kind) DO UPDATE SET weight = EXCLUDED.weight
+                    """,
+                    [(s, d, float(w), host) for s, d, w in chunk],
+                )
+                written += len(chunk)
+        return written
+
+    async def package_repo_map(self) -> list[tuple[str, str, str]]:
+        """(ecosystem, package_name, repo_full_name) for every mapped package.
+
+        This is the 1.4 TiB deps.dev scan, already paid for and persisted. The
+        edge query uploads it back to BigQuery rather than re-deriving it.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT p.ecosystem, p.name, r.full_name "
+                "FROM package p JOIN repo r ON r.id = p.repo_id "
+                "WHERE p.repo_id IS NOT NULL"
+            )
+        return [(r["ecosystem"], r["name"], r["full_name"]) for r in rows]
+
+    async def repo_name_case_map(self, *, host: str = "github") -> dict[str, str]:
+        """lowercase full_name -> stored full_name.
+
+        deps.dev stores `ProjectName` in its own casing and GitHub's API returns
+        another. Joining on the raw strings drops every repository whose owner
+        capitalises differently — silently, as missing edges rather than an
+        error.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT full_name FROM repo WHERE host = $1", host)
+        return {r["full_name"].lower(): r["full_name"] for r in rows}
+
+    async def edge_counts(self) -> dict[str, int]:
+        """Edges by kind, and how many repositories have any at all.
+
+        This exists because it was missing, and its absence let a globe with
+        ZERO edges pass `gitglobe status` while the TypeScript verifier caught
+        it. PageRank over an empty graph returns 1/n for every node — it sums
+        to 1, every rank is positive, and every consistency check passes. The
+        only symptom is `max/min = 1x`. A status command that cannot see the
+        edge table cannot see the most consequential thing about the graph.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT kind, count(*) AS n FROM edge GROUP BY kind")
+            by_kind = {int(r["kind"]): int(r["n"]) for r in rows}
+            connected = await conn.fetchval(
+                "SELECT count(DISTINCT id) FROM ("
+                "  SELECT src AS id FROM edge WHERE kind IN (0, 2)"
+                "  UNION SELECT dst FROM edge WHERE kind IN (0, 2)) t"
+            )
+            packages = await conn.fetchval("SELECT count(*) FROM package WHERE repo_id IS NOT NULL")
+            stars = await conn.fetchval("SELECT count(*) FROM star_event")
+        return {
+            "depends_on": by_kind.get(0, 0),
+            "similar_to": by_kind.get(1, 0),
+            "used_with": by_kind.get(2, 0),
+            "rankable_edges": by_kind.get(0, 0) + by_kind.get(2, 0),
+            "connected_repos": int(connected or 0),
+            "mapped_packages": int(packages or 0),
+            "star_events": int(stars or 0),
+        }
+
+    async def upsert_star_events(self, events: Iterable[tuple[str, str, Any]], *, host: str = "github") -> int:
+        """(full_name, actor, starred_at). Raw events, not pairs.
+
+        Kept raw so the PPMI parameters can be retuned without re-querying
+        BigQuery, which is the expensive half by orders of magnitude.
+        """
+        rows = list(events)
+        if not rows:
+            return 0
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
+                INSERT INTO star_event (actor, repo_id, starred_at)
+                SELECT $2, r.id, $3 FROM repo r
+                WHERE r.host = $4 AND r.full_name = $1
+                ON CONFLICT (actor, repo_id) DO NOTHING
+                """,
+                [(name, actor, at, host) for name, actor, at in rows],
+            )
+        return len(rows)
+
+    async def star_baskets(self, min_size: int = 2, max_size: int = 400) -> list[list[str]]:
+        """One basket of repository names per actor.
+
+        Bounded on both ends in SQL rather than in Python: an actor who starred
+        5,000 repositories is browsing, not choosing, and would alone contribute
+        12.5 million pairs to the co-occurrence count.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT array_agg(r.full_name) AS items
+                FROM star_event s JOIN repo r ON r.id = s.repo_id
+                GROUP BY s.actor
+                HAVING count(*) BETWEEN $1 AND $2
+                """,
+                min_size, max_size,
+            )
+        return [list(r["items"]) for r in rows]
+
+    async def replace_used_with_edges(
+        self, pairs: Iterable[tuple[str, str, float, float]], *, host: str = "github"
+    ) -> int:
+        """(name_a, name_b, ppmi, observations) -> kind=2 edges, both directions.
+
+        Written symmetrically because `used_with` has no direction — "people who
+        use A also use B" is the same fact as its converse — and the CSR builder
+        would otherwise record a direction bit that means nothing.
+        """
+        rows = list(pairs)
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute("DELETE FROM edge WHERE kind = 2")
+            if not rows:
+                return 0
+            await conn.executemany(
+                """
+                INSERT INTO edge (src, dst, kind, weight, ppmi, observations)
+                SELECT ra.id, rb.id, 2, $3, $3, $4
+                FROM repo ra, repo rb
+                WHERE ra.host = $5 AND ra.full_name = $1
+                  AND rb.host = $5 AND rb.full_name = $2
+                  AND ra.id <> rb.id
+                ON CONFLICT (src, dst, kind) DO UPDATE
+                  SET weight = EXCLUDED.weight, ppmi = EXCLUDED.ppmi,
+                      observations = EXCLUDED.observations
+                """,
+                [(a, b, w, int(n), host) for a, b, w, n in rows]
+                + [(b, a, w, int(n), host) for a, b, w, n in rows],
+            )
+        return len(rows)
+
     async def phase2_report(self) -> dict[str, Any]:
         async with self.pool.acquire() as conn:
             return dict(await conn.fetchrow(

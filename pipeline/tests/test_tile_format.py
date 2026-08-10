@@ -30,7 +30,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import numpy as np  # noqa: E402
 
-from gitglobe.tiles.format import (  # noqa: E402
+from gitglobe.tiles.format import (
+    KIND_MASK,
+    KIND_SHIFT,
+    MAX_KIND,
+    WEIGHT_MASK,
+    WEIGHT_OUTGOING,
+    build_undirected_csr,
+    pack_weight_and_kind,  # noqa: E402
     TAU,
     BandSpec,
     GraphArrays,
@@ -299,6 +306,45 @@ class TestEncoderRejectsBadInput(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             encode_graph(graph)
+
+
+
+class TestEdgeKindPacking(unittest.TestCase):
+    """Kind rides in bits 13-14 of the weight. Both halves must survive.
+
+    The failure this guards against is not a crash: an out-of-range kind
+    overflows into bit 15, which is the DIRECTION bit, so the arc silently
+    reverses and still renders.
+    """
+
+    def test_weight_and_kind_both_round_trip(self) -> None:
+        for kind in range(MAX_KIND + 1):
+            with self.subTest(kind=kind):
+                packed = pack_weight_and_kind([1.0], [kind], 1)[0]
+                self.assertEqual((int(packed) & KIND_MASK) >> KIND_SHIFT, kind)
+                self.assertEqual(int(packed) & WEIGHT_MASK, WEIGHT_MASK)
+
+    def test_kind_never_touches_the_direction_bit(self) -> None:
+        packed = pack_weight_and_kind([1.0] * 4, list(range(4)), 4)
+        self.assertFalse((packed & WEIGHT_OUTGOING).any())
+
+    def test_out_of_range_kind_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            pack_weight_and_kind([0.5], [MAX_KIND + 1], 1)
+        with self.assertRaises(ValueError):
+            pack_weight_and_kind([0.5], [-1], 1)
+
+    def test_length_mismatch_is_refused(self) -> None:
+        with self.assertRaises(ValueError):
+            pack_weight_and_kind([0.5, 0.5], [0], 2)
+
+    def test_absent_kind_leaves_weight_untouched(self) -> None:
+        self.assertEqual(int(pack_weight_and_kind([1.0], None, 1)[0]), WEIGHT_MASK)
+
+    def test_csr_carries_kind_into_both_directions(self) -> None:
+        _, _, w = build_undirected_csr(2, [0], [1], [1.0], kind=[2])
+        for entry in w:
+            self.assertEqual((int(entry) & KIND_MASK) >> KIND_SHIFT, 2)
 
 
 if __name__ == "__main__":

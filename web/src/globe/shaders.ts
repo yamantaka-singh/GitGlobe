@@ -143,42 +143,59 @@ ${VERTEX_COMMON}
 export const POINTS_FRAG = /* glsl */ `
   precision mediump float;
 
-  uniform float uHubThreshold;
+  uniform float uHubGain;
 
   varying vec3  vColor;
   varying float vAlpha;
   varying float vHover;
   varying float vSize;
 
+  /**
+   * A star in a nebula, not a target reticle.
+   *
+   * The previous profile drew a literal annulus at r in [0.60, 0.92] on every
+   * node above a size threshold. Rendered offline it is unmistakably a
+   * bullseye: bright core, dark gap, hard outer ring. It fired on 1,657 of
+   * 87,227 nodes — only 1.9%, which is why it was easy to dismiss on the
+   * numbers, but those are the band-0 nodes, the largest things on screen at up
+   * to 28px. Visual weight is not headcount.
+   *
+   * Two properties replace it:
+   *
+   *  1. **Monotonic alpha.** A ring needs alpha to rise again as r grows.
+   *     Everything here is a positive multiple of a decreasing window, so no
+   *     combination of parameters can reintroduce an annulus.
+   *  2. **Importance is continuous.** Rank drives bloom gain, not a branch.
+   *     A threshold means two nodes either side of it render differently for a
+   *     difference of 0.001 in rank, and that discontinuity is exactly what the
+   *     eye reads as a distinct class of object.
+   *
+   * The window is (1 - r2), which is exactly 0 at the rim, so the disc fades
+   * out instead of terminating on the discard. Powers of it are products, so
+   * this is cheaper than the pow()/sqrt() it replaces.
+   */
   void main() {
     vec2 uv = gl_PointCoord * 2.0 - 1.0;
     float r2 = dot(uv, uv);
     if (r2 > 1.0) discard;
 
-    float r = sqrt(r2);
-    float falloff = 1.0 - r;
-    // Hard core, tight falloff, minimal bloom. Using pow() is expensive,
-    // so we approximate pow(falloff, 3.6) with falloff^4 and pow(falloff, 1.4)
-    // with falloff * sqrt(falloff) to save ALUs.
-    float core = falloff * falloff;
-    core = core * core;
-    float halo = falloff * sqrt(falloff) * 0.16;
-    float a = (core + halo) * vAlpha;
+    float w  = 1.0 - r2;
+    float w2 = w * w;
+    float w3 = w2 * w;
+    float core = w3 * w3;   // w^6 - tight centre with no knee
+    float glow = w2;        // broad body
 
-    vec3 rgb = mix(vColor, vec3(1.0), core * 0.62);
+    // Rank widens the bloom rather than drawing a boundary around it.
+    float gain = 0.34 + uHubGain * vSize;
+    float a = (core * 0.62 + glow * 0.30 * gain) * vAlpha;
 
-    // High-rank nodes get a containment ring. It is the cheapest possible
-    // signal that a point is a significant thing rather than a speck, and it
-    // only appears where there are enough pixels to draw it.
-    if (vSize > uHubThreshold) {
-      float strength = smoothstep(uHubThreshold, 1.0, vSize);
-      float ring = smoothstep(0.60, 0.70, r) * (1.0 - smoothstep(0.80, 0.92, r));
-      a += ring * 0.55 * strength * vAlpha;
-      rgb = mix(rgb, vec3(0.62, 0.94, 1.0), ring * strength);
-    }
+    vec3 rgb = mix(vColor, vec3(1.0), core * 0.55);
 
-    // Hover: a crisp bracket ring that stays legible inside a dense cluster.
+    // Hover stays a hard ring on purpose. It is transient, applies to exactly
+    // one node, and has to survive being surrounded by a thousand others -
+    // the discontinuity that is wrong for rank is right for a cursor.
     if (vHover > 0.5) {
+      float r = sqrt(r2);
       float ring = smoothstep(0.58, 0.68, r) * (1.0 - smoothstep(0.84, 0.96, r));
       rgb += ring * 1.8;
       a = max(a, ring);
@@ -235,28 +252,45 @@ export const PICK_FRAG = /* glsl */ `
 `;
 
 /**
- * Twelve domain colours — the "hard sci-fi instrument" direction.
+ * Twelve domain colours, generated in OKLCH rather than chosen by eye.
  *
- * Deliberately cold-dominant: nine cool hues, three warm accents. A full
- * rainbow reads as a data-viz default; a cold field with a few warm signals
- * reads as an instrument, and the warm nodes become the ones your eye finds.
+ * The previous palette described itself as "nine cool hues, three warm
+ * accents". It was the opposite: eleven of twelve sat between 0° and 133° —
+ * gold, orange, neon yellow, tangerine, lime, coral, crimson, peach, lemon and
+ * three pinks. No blues, no greens, no cyans. That is why domains were hard to
+ * tell apart, and the docstring had been asserting the reverse for months.
  *
- * All are bright and saturated because they composite additively onto black —
- * pastels wash out to grey here. Confusable pairs (the red/green axis) are
- * separated by large lightness differences for deuteranopia. Verify with a
- * simulator before Phase 3 ships, per web3d-interaction-ux.
+ * Construction: twelve hues 30° apart at constant chroma, with lightness
+ * ALTERNATING between 0.70 and 0.92. The alternation is the important part —
+ * hues that collapse together under colour blindness are then separated by
+ * brightness instead, which no amount of hue spacing can achieve.
+ *
+ * Measured in OKLab, minimum pairwise distance across all 66 pairs:
+ *
+ *                      before   after
+ *   normal vision      0.0754  0.1080   1.43x
+ *   deuteranopia       0.0311  0.0553   1.78x
+ *   tritanopia         0.0148  0.0500   3.38x
+ *   vs the planet      0.3671  0.3288   still well clear
+ *
+ * Every colour stays bright because nodes composite additively onto near-black
+ * and must remain the most luminous thing on screen; and every one is checked
+ * against the planet's mid-blue so no domain disappears into the surface.
+ *
+ * Regenerate rather than hand-edit: adjusting one entry by eye is how a palette
+ * drifts back into a single hue family.
  */
 export const DOMAIN_PALETTE: readonly (readonly [number, number, number])[] = [
-  [1.00, 0.85, 0.30], // AI / ML — bright gold
-  [1.00, 0.45, 0.15], // Web frameworks — vivid orange
-  [0.95, 1.00, 0.40], // Databases — neon yellow
-  [1.00, 0.25, 0.55], // DevOps — hot pink
-  [0.65, 1.00, 0.30], // Languages — electric lime
-  [1.00, 0.65, 0.20], // Systems — tangerine
-  [1.00, 0.35, 0.35], // Data engineering — coral red
-  [0.85, 0.15, 0.15], // Security — crimson
-  [0.85, 0.40, 1.00], // Graphics — bright magenta
-  [1.00, 0.75, 0.55], // Mobile — peach
-  [1.00, 0.95, 0.65], // Scraping — pale lemon
-  [1.00, 0.55, 0.85], // Scientific — flamingo pink
+  [0.891, 0.463, 0.607], // AI / ML — rose
+  [1.000, 0.753, 0.677], // Web frontend — pale salmon
+  [0.865, 0.529, 0.212], // Data and storage — amber
+  [1.000, 0.879, 0.429], // Infrastructure — light gold
+  [0.579, 0.669, 0.225], // Languages and compilers — olive
+  [0.615, 1.000, 0.700], // Systems and embedded — pale mint
+  [0.000, 0.729, 0.634], // Data engineering — teal
+  [0.327, 0.994, 1.000], // Security — pale cyan
+  [0.216, 0.660, 0.925], // Graphics and games — azure
+  [0.754, 0.877, 1.000], // Mobile — pale periwinkle
+  [0.675, 0.536, 0.910], // Automation and tooling — violet
+  [1.000, 0.760, 1.000], // Science and numerics — pale orchid
 ];

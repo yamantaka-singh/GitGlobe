@@ -254,21 +254,25 @@ const PLANET_FRAG = /* glsl */ `
     vec3 albedo = mix(uFallback, surf.rgb, uHasSurface);
     float cityLights = surf.a * uHasSurface;
 
-    // ---- day / night -------------------------------------------------------
+    // ---- emission ----------------------------------------------------------
+    // A nebula is self-luminous, so there is no terminator to speak of. The sun
+    // term is kept only as a weak modelling cue: with no directional variation
+    // at all a sphere of glowing gas flattens into a disc and the globe stops
+    // reading as a globe. uNightFloor is therefore high rather than near
+    // zero - it sets how much of the surface is visible independent of the
+    // light, which for gas is nearly all of it.
     float sun = dot(n, normalize(uSunDir));
     float day = smoothstep(-uTerminator, uTerminator, sun);
 
     vec3 rgb = albedo * (uNightFloor + (1.0 - uNightFloor) * day);
 
-    // Aurora and storm glow burn only on the unlit side, brightest deep into
-    // the dark where nothing competes. Without this the night limb is a dead
-    // black crescent and the planet looks bitten into.
+    // The gas glows its OWN colour. Routing emission through a single fixed
+    // tint - which is what the ice giant's aurora did - would erase the domain
+    // hue exactly where the gas is densest, and density is where territories
+    // are. A small cyan lift stands in for the OIII line sitting on top.
     float night = 1.0 - day;
-    rgb += uCityLight * cityLights * night * night * 1.15;
-
-    // A warm sliver exactly at the terminator, plus a hint of scatter bleeding
-    // onto the dark side of the boundary.
-    rgb += uCityLight * pow(1.0 - abs(sun), 26.0) * 0.16;
+    vec3 emissive = albedo * 1.45 + uCityLight * 0.22;
+    rgb += emissive * cityLights * (0.62 + 0.38 * night);
 
     // ---- graticule ---------------------------------------------------------
     // Kept very faint now that there is terrain to read. It exists to say
@@ -303,7 +307,10 @@ export function Planet({ radius, surface }: { radius: number; surface: THREE.Tex
           uGraticuleGain: { value: 0.16 },
           // Never fully black: an unlit hemisphere with zero albedo loses its
           // silhouette against space and the globe looks bitten into.
-          uNightFloor: { value: 0.10 },
+          // High, not near-zero: emissive gas is visible all the way round.
+          // The residual 0.28 of directional variation is what keeps the sphere
+          // from flattening into a disc.
+          uNightFloor: { value: 0.72 },
           // A gas giant's atmosphere is deep, so its terminator is soft. A hard
           // edge is the tell that you are looking at a lit sphere, not a world.
           uTerminator: { value: 0.42 },

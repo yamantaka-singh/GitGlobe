@@ -467,6 +467,185 @@ Give the model the cluster label list (a few hundred short strings, cheap) so it
 
 ---
 
+### ADR-009: One relationship per visual channel
+
+**Status.** Accepted. **Date.** 2026-08-10.
+
+**Context.** Five successive attempts to make territories meaningful each fixed
+the previous symptom and broke something else:
+
+| attempt | groups | outcome |
+|---|---|---|
+| HDBSCAN on the sphere | 137 | 51% of the corpus left as noise |
+| Louvain, all edges | 17,685 | median group size 2 |
+| Louvain + `--similar-k 16` | 8,252 | median 5, still unusable |
+| Louvain, self-loop fix | 8,252 | resolution finally reached the algorithm |
+| Louvain, dependencies only | 44 | worst semantic coherence of the three |
+
+Per the debugging discipline, three or more failed fixes is an architectural
+problem, not a run of bad hypotheses. Instrumenting the real graph gave the
+answer in one run: the 64,911-member blob contained **29** `depends_on` edges
+and **246,852** `similar_to` edges.
+
+**Decision.** Each visual channel carries exactly one relationship.
+
+| channel | relationship | source |
+|---|---|---|
+| position | similarity | UMAP on embeddings, haversine output |
+| colour | similarity, coarsened | spherical k-means over positions |
+| arcs | dependency | deps.dev, drawn on demand |
+| size | importance | PageRank with a stars tiebreak |
+
+**Options considered.**
+
+*Communities from the edge graph.* Rejected on measurement. Dependency
+communities scored a purity lift of 0.0436 — close to semantically orthogonal.
+That is not a defect in the data: a web framework and a logging library are
+genuinely connected and genuinely unalike. It makes dependency the wrong basis
+for a colour meaning "these are the same kind of thing".
+
+*Communities from `similar_to`.* Rejected as circular. That layer is a
+mutual-top-k filter over the same kNN graph UMAP used to place the points —
+clustering it is clustering the positions through a lossier lens. It is also a
+mesh on a smooth manifold, with no dense-inside/sparse-between contrast for
+modularity to find, so it yields either one blob or arbitrary tiles.
+
+*Partition space directly.* Accepted. Spherical k-means at two scales — 400
+regions over points, 12 domains over those centroids, so the levels cannot
+contradict. Every repository assigned, territories contiguous by construction,
+deterministic, no noise class.
+
+**Consequences.** Colour can no longer express "these ship together"; that fact
+lives in arcs and in `cluster_id`. Region count is a chosen parameter rather
+than a discovered one, which is honest for a map — cartography partitions, it
+does not discover continents by clustering. Measured: 400 regions, median 208
+members, tightness 0.9976, 94.3% contiguity, 6.9 seconds at 87k repositories.
+
+---
+
+### ADR-010: Measure on isotropic vectors
+
+**Status.** Accepted. **Date.** 2026-08-10.
+
+**Context.** Territories were reported as incoherent — purity lift 0.0602
+against a 0.05 warning threshold — and four of the five clustering attempts
+above were driven by that number. Two independent flaws made it misleading.
+
+**Anisotropy.** Random repository pairs scored **0.6473** cosine similarity.
+LLM embeddings occupy a narrow cone with one dominant shared direction, so every
+real distinction competed for the remaining 0.35 of the range. Mean-centring and
+renormalising moved random pairs to 0.0003 and the lift of an *unchanged*
+partition from 0.0602 to **0.1687**, clearing the threshold. The structure was
+never weak; the ruler was a third of its proper length.
+
+The isotropy scan chose **zero** principal components — mean-centring alone.
+"All-but-the-top" (Mu & Viswanath, 2018) suggests d/100, but the number is a
+property of the corpus and is cheap to measure, so it is measured.
+
+**Scale bias.** Lift falls with group size on fixed data with fixed structure:
+
+    median group size    4     10     25     50    166    333
+    lift              0.330  0.240  0.191  0.162  0.117  0.095
+
+A 3.5x swing from k alone. A size-matched random control reproduced `lift`
+exactly, confirming the effect is real rather than a sampling artefact — larger
+groups genuinely span more space. Worse, lift measures within-group similarity,
+precisely what k-means optimises: on that data a k-means partition scored 0.162
+against the *true generating partition's* 0.003. The metric cannot referee
+between geometric and graph methods.
+
+**Decision.** Purity is measured on whitened vectors, always reported beside
+`median_size`, and its warning threshold scales as `0.30 / (1 + log10(median))`.
+For comparing partitions of different granularity, **Markov stability**
+(Delvenne, Yaliraki & Barahona, 2010) replaces it: a random walker's escape
+time, evaluated at explicit Markov times. Scale becomes a stated parameter
+instead of a hidden artefact, and a 1,200-group partition and a 4-group one land
+on one axis.
+
+**Consequences.** Two metrics with distinct jobs — purity for coherence at a
+fixed granularity, stability for cross-granularity comparison. Neither may be
+read alone. Every comparison table in this project's history that spans
+granularities is invalid and should be recomputed before being cited.
+
+**Implementation notes.** The Markov walk needs `exp(t(P-I))`; a truncated
+Taylor series diverges once t exceeds the truncation order, returning 2.5e13 at
+t=64 — and merely "large" at t=16, where it would have passed unnoticed. Markov
+time is therefore split into sub-steps of at most 2.0. `np.add.at` for the
+segmented sum exceeded a two-minute timeout; CSR rows are contiguous, so
+`np.add.reduceat` does it at C speed.
+
+---
+
+### ADR-011: Geometry for hierarchy — hyperbolic or spherical
+
+**Status.** **Proposed — needs a decision.** **Date.** 2026-08-10.
+
+**Context.** Dependency graphs are scale-free and hierarchical: a few
+foundational packages with thousands of dependents, and a long tail of leaves.
+Euclidean and spherical space embed trees poorly — the volume available at
+radius r grows polynomially while the number of tree nodes grows
+exponentially, so descendants crowd at the boundary and distances distort.
+Hyperbolic space (Nickel & Kiela, 2017) has exponentially growing volume and
+embeds hierarchies with far lower distortion, which is a real and well
+established result.
+
+Two facts constrain the choice.
+
+**The sphere is the product, not an implementation detail.** ADR-002 chose it
+because every bounded layout tells the same lie: a boundary says "nothing
+beyond here", when what is beyond is the other side of the map. The Poincaré
+ball has a boundary — at infinity, but a boundary on screen. A globe you can
+spin forever is the premise, and panning that dead-ends is the thing the sphere
+exists to prevent.
+
+**Position is already carrying similarity, and it works.** The spotcheck passes
+decisively: pytorch/tensorflow/jax within 0.170 rad, frontend 2.220 rad from
+ML, random pairs at 1.564 rad ≈ PI/2 on a uniformly covered sphere. Re-tasking
+position to carry hierarchy means giving up a verified property for an
+unverified one.
+
+**Options.**
+
+*A — Keep spherical. Hierarchy stays in arcs.* No change. Hierarchy is
+expressed by the arc layer and by node size (PageRank). Cheap, preserves the
+verified map and the endless globe. Cost: the hierarchy is never *legible as
+shape* — you cannot see that React sits above its ecosystem, only that arcs
+converge on it.
+
+*B — Replace the sphere with a Poincaré ball.* Hierarchy becomes the primary
+visual: foundational libraries near the origin, applications toward the rim.
+Mathematically the best fit for dependencies. Cost: abandons the globe, the
+navigation model, the tile format's θ/φ encoding, the picking shader, and the
+verified semantic layout. This is a different product.
+
+*C — Two geometries, two relationships.* Spherical position for similarity, as
+now. A hyperbolic embedding of the dependency graph computed separately and used
+where hierarchy is the question — arc curvature, a "show me what this sits on
+top of" view, or a second linked panel. Consistent with ADR-009: one
+relationship per channel. Cost: a second embedding to compute and keep current,
+and a second mental model for the reader.
+
+*D — Radial depth on the sphere.* Approximate hyperbolic behaviour by lifting
+nodes off the surface by dependency depth, so foundations float lower and leaves
+higher. Cheap, keeps everything, and captures the readable part of hierarchy.
+Cost: it is an approximation with no distortion guarantees, and the third
+dimension competes with the atmosphere and arc layers for visual space.
+
+**Recommendation.** C, deferred until the `used_with` layer lands. A hyperbolic
+embedding of the dependency graph would today cover **12,588 of 87,227
+repositories** — 14%. The same coverage limit applies to the GCN proposal:
+message passing needs messages, and 86% of the corpus has no dependency edge, so
+a graph network would return 74,639 embeddings unchanged. Both techniques are
+correct and both are waiting on the same missing data.
+
+**Action items.**
+1. [ ] Run `gitglobe edges --skip-dependencies --months 24` to extend
+       `used_with` coverage beyond the packaged 14%.
+2. [ ] Re-measure dependency-graph coverage; revisit this ADR above ~50%.
+3. [ ] Decide between C and D once hierarchy is visible for most of the corpus.
+
+---
+
 ## 8. Cost model
 
 Order-of-magnitude, at 1M repos.

@@ -1,60 +1,75 @@
 /**
- * Colour — an ice giant.
+ * Colour — an emission nebula.
  *
- * Neptune's look comes from three things, and getting any one of them wrong
- * makes it read as "a blue ball":
+ * The body was an ice giant: latitudinal banding, methane cirrus, dark storm
+ * ovals, lit by a sun. A nebula is the opposite object in every respect that
+ * matters to a renderer, and the palette has to change with it:
  *
- *  1. **Depth, not hue.** It is not one blue. It is a deep ultramarine base
- *     with paler zones banded across it, and the contrast between them is low —
- *     around 25% — which is why photographs look soft rather than striped.
- *  2. **Methane cirrus.** Bright white streaks sitting *above* the bands,
- *     catching light at a different angle. They are the detail that makes it
- *     look like weather instead of paint.
- *  3. **Dark storms.** A handful of near-black ovals, elongated in longitude,
- *     with bright companion clouds at their edges.
+ *  1. **It emits, it does not reflect.** There is no albedo and no terminator.
+ *     Brightness tracks density and ionisation, not the angle to a light.
+ *  2. **Hue encodes excitation.** Real emission nebulae are not one colour:
+ *     ionised hydrogen glows crimson-magenta, doubly-ionised oxygen glows
+ *     teal. That two-hue tension is the thing that reads as "nebula" — a
+ *     single-hue cloud reads as smoke.
+ *  3. **Dust is foreground, not absence.** The dark rifts are opaque dust
+ *     lanes in front of the glow, so they are near-black and hard-edged, not
+ *     a fade to the background.
  *
- * The data layer sits on top of all of this, so everything here stays under
- * roughly 0.55 luminance. A hundred thousand nodes have to remain the brightest
- * things on screen.
+ * The one rule carried over unchanged: everything here stays under roughly
+ * 0.55 luminance. A hundred thousand nodes have to remain the brightest things
+ * on screen, and a nebula is far easier to accidentally blow out than a planet
+ * because it is emissive everywhere rather than only on the lit half.
  */
 
 type RGB = readonly [number, number, number];
 
 export const PLANET_SURFACE = {
-  /** Abyssal ultramarine — the deepest visible layer, between the bands. */
-  deep: [0.031, 0.078, 0.243] as RGB,
-  /** The dominant body colour. */
-  mid: [0.106, 0.224, 0.545] as RGB,
-  /** Pale zones — upper-atmosphere haze catching more light. */
-  light: [0.259, 0.451, 0.804] as RGB,
-  /** Highest zones, almost cyan. Used sparingly or the planet turns turquoise. */
-  pale: [0.478, 0.702, 0.933] as RGB,
-  /** Methane cirrus. Never pure white — that belongs to the selected node. */
-  cirrus: [0.847, 0.925, 1.0] as RGB,
-  /** Storm cores, darker than the deepest band. */
-  storm: [0.016, 0.035, 0.125] as RGB,
+  /** The void between filaments. Not black — deep space already owns black. */
+  deep: [0.020, 0.016, 0.055] as RGB,
+  /** Base gas: the faint indigo bulk that fills most of the volume. */
+  mid: [0.118, 0.071, 0.239] as RGB,
+  /** Mid-density emission — H-alpha, the crimson-magenta that dominates. */
+  light: [0.416, 0.176, 0.376] as RGB,
+  /** Hot cores near the exciting stars. Warm, and used sparingly. */
+  pale: [0.612, 0.396, 0.482] as RGB,
+  /** Ionisation fronts — OIII teal. The counter-hue that sells the nebula. */
+  cirrus: [0.388, 0.714, 0.678] as RGB,
+  /** Dust lanes. Opaque, faintly warm, darker than the void behind them. */
+  storm: [0.035, 0.020, 0.031] as RGB,
 } as const;
 
 /**
- * Per-domain tints for the great cloud systems.
+ * Per-domain tints for the great gas concentrations.
  *
- * A territory on a gas giant is a persistent weather system, not a continent.
- * Each is a subtle shift in the band colour — every entry stays inside the
- * blue-violet family so the planet reads as one body rather than a paint chart.
+ * These are the SAME TWELVE HUES as `DOMAIN_PALETTE` in `shaders.ts`, pulled
+ * down in luminance and mixed toward the nebula's base indigo. That pairing is
+ * the point: a domain's nodes and the medium they sit in now share a hue, so
+ * the territory reads as those repositories' own region rather than as an
+ * unrelated stripe of colour underneath them. Previously the two palettes were
+ * chosen independently — nodes warm, terrain uniformly blue-violet — and a
+ * territory's colour therefore told you nothing about the nodes on it.
+ *
+ * The old set stayed inside one hue family so a *planet* would read as one
+ * body. A nebula has no body to hold together; it is a medium, and a medium can
+ * carry hue variation without falling apart. So the constraint that forced
+ * every domain toward blue is gone, and twelve distinguishable hues fit.
+ *
+ * Luminance lands between 0.28 and 0.41 — well under the 0.55 ceiling, so the
+ * nodes still win.
  */
 export const DOMAIN_TERRAIN_TINT: readonly RGB[] = [
-  [0.180, 0.404, 0.780] as RGB, // AI / ML — cerulean
-  [0.400, 0.396, 0.741] as RGB, // Web frameworks — periwinkle
-  [0.153, 0.463, 0.639] as RGB, // Databases — teal blue
-  [0.451, 0.427, 0.667] as RGB, // DevOps — dusty violet
-  [0.322, 0.318, 0.741] as RGB, // Languages — indigo
-  [0.235, 0.514, 0.784] as RGB, // Systems — sky
-  [0.114, 0.396, 0.596] as RGB, // Data engineering — deep teal
-  [0.494, 0.373, 0.643] as RGB, // Security — mauve
-  [0.435, 0.353, 0.784] as RGB, // Graphics — violet
-  [0.208, 0.373, 0.729] as RGB, // Mobile — cobalt
-  [0.286, 0.510, 0.702] as RGB, // Scraping — steel cyan
-  [0.337, 0.408, 0.616] as RGB, // Scientific — slate blue
+  [0.421, 0.224, 0.374] as RGB, // AI / ML — deep rose
+  [0.465, 0.340, 0.402] as RGB, // Web frontend — deep salmon
+  [0.411, 0.251, 0.216] as RGB, // Data and storage — deep amber
+  [0.465, 0.391, 0.303] as RGB, // Infrastructure — deep gold
+  [0.296, 0.307, 0.221] as RGB, // Languages and compilers — deep olive
+  [0.311, 0.439, 0.411] as RGB, // Systems and embedded — deep mint
+  [0.065, 0.331, 0.385] as RGB, // Data engineering — deep teal
+  [0.196, 0.437, 0.531] as RGB, // Security — deep cyan
+  [0.151, 0.303, 0.501] as RGB, // Graphics and games — deep azure
+  [0.367, 0.390, 0.531] as RGB, // Mobile — deep periwinkle
+  [0.335, 0.253, 0.495] as RGB, // Automation and tooling — deep violet
+  [0.465, 0.343, 0.531] as RGB, // Science and numerics — deep orchid
 ];
 
 /**
@@ -74,6 +89,35 @@ export const ATMOSPHERE = {
   rim: [0.302, 0.549, 0.973] as RGB,
   scatter: [0.400, 0.353, 0.847] as RGB,
 } as const;
+
+/**
+ * Arc colour by relationship type — the semantics of an edge, not decoration.
+ *
+ * Every arc was previously one colour, which meant the wires carried exactly
+ * one bit: connected or not. The database has distinguished three kinds since
+ * migration 002 and the renderer simply never saw them.
+ *
+ * The assignment is not arbitrary:
+ *
+ *  - **depends_on** is amber. It is the only DIRECTED relationship of the
+ *    three — A needs B — and the travelling pulse already reads as flow along
+ *    the wire. Warm reads as active, and amber is the one hue with no
+ *    counterpart in the nebula behind it, so hard structural facts never
+ *    camouflage against the medium.
+ *  - **similar_to** is cyan. Semantic kinship is symmetric and passive, and
+ *    cool recedes. It is also the most numerous kind by a wide margin, so it
+ *    has to be the quietest or the globe turns into a ball of string.
+ *  - **used_with** is violet. Co-occurrence sits between the two: evidence of
+ *    a real relationship, but observed rather than declared.
+ *
+ * All three are brighter than the 0.55 surface ceiling because an arc has to
+ * be legible crossing a lit region of the medium.
+ */
+export const ARC_KIND_COLOR: readonly RGB[] = [
+  [1.0, 0.671, 0.259] as RGB, // 0 depends_on — amber
+  [0.302, 0.788, 0.847] as RGB, // 1 similar_to — cyan
+  [0.706, 0.510, 0.973] as RGB, // 2 used_with — violet
+];
 
 /** Deep space with a trace of blue, so the rim has somewhere to fall off to. */
 export const SPACE: RGB = [0.004, 0.006, 0.016];

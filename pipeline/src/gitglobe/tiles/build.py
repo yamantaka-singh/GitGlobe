@@ -252,7 +252,10 @@ def build_world(
         start = stop
 
     # ---- graph ----------------------------------------------------------
-    db_src, db_dst, weight = edges
+    # A 4th element carries edge.kind. Optional so every existing caller keeps
+    # working; absent it, all arcs render as kind 0.
+    db_src, db_dst, weight = edges[0], edges[1], edges[2]
+    db_kind = edges[3] if len(edges) > 3 else None
     graph_meta = None
 
     if len(db_src):
@@ -270,9 +273,11 @@ def build_world(
         src = np.array([ordinal_of[int(a)] for a in db_src[keep]], dtype=np.uint32)
         dst = np.array([ordinal_of[int(b)] for b in db_dst[keep]], dtype=np.uint32)
         w = np.asarray(weight, np.float64)[keep]
+        k = np.asarray(db_kind, np.int64)[keep] if db_kind is not None else None
     else:
         src = dst = np.zeros(0, np.uint32)
         w = np.zeros(0)
+        k = None
 
     self_loops = src == dst
     if self_loops.any():
@@ -280,6 +285,10 @@ def build_world(
         # from a node to itself, which is a zero-length line.
         log.info("Dropped %d self-loops", int(self_loops.sum()))
         src, dst, w = src[~self_loops], dst[~self_loops], w[~self_loops]
+        # Kind must be filtered by the SAME mask or it desynchronises from the
+        # edges and every arc gets some other edge's colour.
+        if k is not None:
+            k = k[~self_loops]
 
     # Normalise weights into [0, 1] for the 15-bit weight field.
     if len(w):
@@ -288,7 +297,7 @@ def build_world(
     else:
         norm_w = w
 
-    offsets, targets, weights = build_undirected_csr(n, src, dst, norm_w)
+    offsets, targets, weights = build_undirected_csr(n, src, dst, norm_w, kind=k)
     ambient = select_ambient(src, dst, norm_w, rank, limit=ambient_arcs)
 
     graph = GraphArrays(
@@ -347,12 +356,26 @@ def build_world(
     return BuildResult(manifest=manifest, ordinal_of=ordinal_of, bytes_written=total_bytes, files=files)
 
 
+#: Communities written into the manifest, largest first.
+#:
+#: Louvain returns ~18,000 communities on an 87k corpus with a median size of
+#: TWO. Writing all of them produced a 3 MB manifest.json — larger than every
+#: tile combined, and it is the first request the browser makes, so it blocked
+#: first paint on data that can never be used. A two-member community cannot
+#: carry a label, cannot be a fly-to target, and is not a colony.
+#:
+#: The cap is on what gets PUBLISHED. Every repository keeps its community id in
+#: Postgres; this only decides which are worth naming.
+MAX_MANIFEST_CLUSTERS = 400
+
+
 def cluster_manifest_entries(
     cluster_id: np.ndarray,
     theta: np.ndarray,
     phi: np.ndarray,
     domain: np.ndarray,
     labels: dict | None = None,
+    limit: int = MAX_MANIFEST_CLUSTERS,
 ) -> list[dict]:
     """Per-cluster centres and spreads, for camera fly-to and hub labels.
 
@@ -361,8 +384,26 @@ def cluster_manifest_entries(
     cluster wants a close shot, a diffuse one wants a wide one. Using a fixed
     distance instead means half the fly-tos overshoot and half undershoot.
     """
+    # Rule 7. Four parallel arrays. A mismatch does not raise — boolean masking
+    # against a shorter array yields a shorter result, so cluster centres get
+    # computed from the wrong members and the camera flies to the wrong place.
+    lengths = {len(cluster_id), len(theta), len(phi), len(domain)}
+    if len(lengths) != 1:
+        raise ValueError(
+            f"cluster_id/theta/phi/domain lengths differ: "
+            f"{len(cluster_id)}, {len(theta)}, {len(phi)}, {len(domain)}"
+        )
+
+    # Largest first, then capped. Sorting by size rather than by id means the
+    # cut removes pairs and triples, not whichever communities Louvain happened
+    # to number last.
+    present = np.unique(cluster_id[cluster_id >= 0])
+    if len(present) > limit:
+        counts = np.array([int((cluster_id == c).sum()) for c in present])
+        present = present[np.argsort(-counts)[:limit]]
+
     entries = []
-    for c in np.unique(cluster_id[cluster_id >= 0]):
+    for c in present:
         members = cluster_id == c
         st = np.sin(theta[members])
         vectors = np.column_stack(

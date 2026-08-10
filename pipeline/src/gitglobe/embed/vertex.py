@@ -211,11 +211,7 @@ class VertexEmbedder:
                     headers={"Authorization": f"Bearer {self._token()}"},
                 )
                 if response.status_code == 200:
-                    payload = response.json()["predictions"][0]["embeddings"]
-                    self.stats.billable_tokens += int(
-                        payload.get("statistics", {}).get("token_count", 0)
-                    )
-                    return np.asarray(payload["values"], dtype=np.float32)
+                    return self._vector_from(response)
 
                 # 4xx other than 429 will fail identically forever — retrying
                 # a malformed request just wastes the quota the good rows need.
@@ -236,6 +232,27 @@ class VertexEmbedder:
 
         self._record_failure("exhausted_retries")
         return None
+
+    def _vector_from(self, response) -> np.ndarray | None:
+        """Pull the vector out of a 200 response. None if the body is not one.
+
+        A 200 does not guarantee the shape. An empty `predictions`, a renamed
+        field, or a truncated body all raise KeyError or IndexError on the
+        chained subscript — and an exception escaping the calling coroutine
+        cancels every other in-flight worker and discards the unpersisted
+        batch. One odd response in a hundred thousand must cost one row.
+        """
+        try:
+            payload = response.json()["predictions"][0]["embeddings"]
+            values = payload["values"]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            self._record_failure(f"malformed_response_{type(exc).__name__}")
+            log.warning("Unexpected 200 body: %s", response.text[:200])
+            return None
+        self.stats.billable_tokens += int(
+            payload.get("statistics", {}).get("token_count", 0)
+        )
+        return np.asarray(values, dtype=np.float32)
 
     def _record_failure(self, reason: str) -> None:
         self.stats.failed += 1
@@ -259,8 +276,16 @@ class VertexEmbedder:
         lock = asyncio.Lock()
 
         async def worker(repo_id: int, text: str) -> None:
-            async with semaphore:
-                vector = await self.embed_one(text)
+            try:
+                async with semaphore:
+                    vector = await self.embed_one(text)
+            except Exception as exc:  # noqa: BLE001 - one row must not end the run
+                # `gather` propagates the FIRST exception and cancels the rest,
+                # so anything escaping here costs the entire unpersisted batch —
+                # embeddings already paid for. Contain it at the worker.
+                self._record_failure(f"worker_{type(exc).__name__}")
+                log.warning("Worker failed for repo %s: %s", repo_id, exc)
+                return
             if vector is None:
                 return
             async with lock:
@@ -273,7 +298,11 @@ class VertexEmbedder:
                     await on_batch(flush)
 
         self.stats.requested += len(items)
-        await asyncio.gather(*(worker(rid, txt) for rid, txt in items))
+        # `return_exceptions=True` as a second line of defence: even if a worker
+        # somehow raises, the remaining ones finish and their work is kept.
+        await asyncio.gather(
+            *(worker(rid, txt) for rid, txt in items), return_exceptions=True
+        )
 
         if on_batch and pending:
             await on_batch(dict(pending))

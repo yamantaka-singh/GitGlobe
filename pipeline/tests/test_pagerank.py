@@ -287,10 +287,25 @@ class TestBandedDisplaySize(unittest.TestCase):
         self.assertEqual(len(size), 3)
         self.assertFalse(np.isnan(size).any())
 
-    def test_single_band_uses_the_full_range(self) -> None:
+    def test_single_band_spans_the_floor_to_the_top(self) -> None:
+        from gitglobe.graph.pagerank import MIN_DISPLAY_SIZE
+
         size = banded_display_size(np.array([0.5, 0.3, 0.2]), [3])
         self.assertAlmostEqual(size.max(), 1.0)
-        self.assertAlmostEqual(size.min(), 0.0)
+        # NOT zero. The point shader clamps at one pixel, so a size of 0.0 is
+        # not "smallest visible" — it is "invisible", and 80% of the globe
+        # lives in the bottom band.
+        self.assertAlmostEqual(size.min(), MIN_DISPLAY_SIZE)
+
+    def test_nothing_is_ever_sized_below_the_visibility_floor(self) -> None:
+        from gitglobe.graph.pagerank import MIN_DISPLAY_SIZE
+
+        rank = np.sort(realistic_ranks())[::-1]
+        for bands in ([len(rank)], [60, 540, len(rank) - 600], [10, 20, 30, len(rank) - 60]):
+            with self.subTest(bands=len(bands)):
+                self.assertGreaterEqual(
+                    banded_display_size(rank, bands).min(), MIN_DISPLAY_SIZE - 1e-9
+                )
 
     def test_empty_input(self) -> None:
         self.assertEqual(len(banded_display_size(np.zeros(0), [])), 0)

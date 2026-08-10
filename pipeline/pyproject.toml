@@ -35,6 +35,44 @@ packages = ["src/gitglobe"]
 line-length = 100
 target-version = "py310"
 
+# Power of 10 rule 10: compile with every warning on, and fix every warning.
+# In C that means -Wall -Werror. Here it means selecting more than ruff's
+# default handful and treating the result as a gate, not a suggestion.
+#
+# `PLR0915` (too many statements) and `C901` (complexity) are the closest
+# automatic checks to rule 4, but `tests/test_power_of_ten.py` is the one that
+# enforces it — a lint rule cannot hold a written justification, and an
+# exception without a reason is how a standard rots.
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes — unused names, undefined names
+    "B",           # bugbear — mutable defaults, unused loop vars, silent bugs
+    "SIM",         # simplifiable constructs
+    "C4",          # comprehension misuse
+    "RET",         # inconsistent returns (rule 7: check every return)
+    "ARG",         # unused arguments — usually a signature that drifted
+    "PTH",         # os.path where pathlib belongs
+    "RUF",         # ruff's own correctness checks
+    "PLR0915",     # too many statements
+    "C901",        # cyclomatic complexity
+]
+ignore = [
+    "E501",        # line length is already set above; the formatter owns it
+    "B008",        # function call in default arg — intentional for np defaults
+    "RET504",      # named return values are often the clearer read
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.pylint]
+max-statements = 60
+
+[tool.ruff.lint.per-file-ignores]
+# Tests deliberately construct broken inputs and poke at internals.
+"tests/*" = ["ARG", "PLR0915", "C901", "B011"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
