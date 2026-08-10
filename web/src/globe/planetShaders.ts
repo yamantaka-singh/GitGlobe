@@ -221,28 +221,29 @@ ${NOISE}
     float dust = smoothstep(0.44, 0.78, fbm3(dir * 2.85 + uSeed * 2.1) * 0.5 + 0.5);
 
     // ---- emission colour ---------------------------------------------------
-    // Hotter where denser, the way ionisation tracks proximity to the exciting
-    // stars: void -> base gas -> mid emission -> hot core.
-    vec3 gas = mix(uDeep, uMid, smoothstep(0.00, 0.42, density));
-    gas = mix(gas, uLight, smoothstep(0.38, 0.78, density));
-    gas = mix(gas, uPale, smoothstep(0.82, 0.99, density) * 0.75);
+    // A subtle, non-uniform dimmed navy blue background using the cloud noise.
+    vec3 navy = vec3(0.02, 0.03, 0.12);
+    vec3 gas = navy * (cloud * 0.8 + density * 0.5) * (1.0 - dust * 0.8);
 
-    // Territory recolours the gas. Restraint is still the rule from the banded
-    // version: a hundred thousand nodes have to stay the brightest things on
-    // screen, so the medium is tinted, never saturated.
-    gas = mix(gas, gas * 0.42 + tint * 0.78, territory * 0.66);
-
-    // Ionisation fronts: the bright rims where a filament crest faces the
-    // radiation. Narrow, or the whole field turns white.
-    gas = mix(gas, uCirrus, smoothstep(0.82, 0.99, fil) * 0.30);
-
-    gas = mix(gas, uStorm, dust * 0.58);
+    // ---- Celestialsapien / Alien X Stars -----------------------------------
+    // Generate multiple layers of stars to give infinite depth
+    float star1 = fract(sin(dot(dir, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
+    float star2 = fract(sin(dot(dir, vec3(45.164, 12.9898, 78.233))) * 23758.5453);
+    float star3 = fract(sin(dot(dir, vec3(78.233, 45.164, 12.9898))) * 63758.5453);
+    
+    // Thresholds for different sizes/brightnesses
+    float s1 = smoothstep(0.995, 1.0, star1) * 2.0;
+    float s2 = smoothstep(0.998, 1.0, star2) * 1.5;
+    float s3 = smoothstep(0.9995, 1.0, star3) * 3.0; // very rare, very bright
+    
+    float stars = s1 + s2 + s3;
+    
+    // Add stars heavily, keeping them white/cyan-tinted
+    gas += vec3(stars * 0.95, stars * 0.98, stars * 1.0);
 
     // ---- emission ----------------------------------------------------------
-    // A nebula is self-luminous, so unlike the ice giant's aurora this is not
-    // a night-only term - Backdrop reads it as omnidirectional emission and
-    // holds the sun term down to a slight modelling cue. Dust cuts it.
-    float glow = clamp(density * (1.0 - dust * 0.75) * 0.58, 0.0, 1.0);
+    // No aurora or city light glow (which is tinted blue). Just output the stars directly into the albedo.
+    float glow = 0.0;
 
     gl_FragColor = vec4(gas, glow);
   }

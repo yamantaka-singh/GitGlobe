@@ -24,18 +24,18 @@
 type RGB = readonly [number, number, number];
 
 export const PLANET_SURFACE = {
-  /** The void between filaments. Not black — deep space already owns black. */
-  deep: [0.020, 0.016, 0.055] as RGB,
-  /** Base gas: the faint indigo bulk that fills most of the volume. */
-  mid: [0.118, 0.071, 0.239] as RGB,
-  /** Mid-density emission — H-alpha, the crimson-magenta that dominates. */
-  light: [0.416, 0.176, 0.376] as RGB,
-  /** Hot cores near the exciting stars. Warm, and used sparingly. */
-  pale: [0.612, 0.396, 0.482] as RGB,
-  /** Ionisation fronts — OIII teal. The counter-hue that sells the nebula. */
-  cirrus: [0.388, 0.714, 0.678] as RGB,
-  /** Dust lanes. Opaque, faintly warm, darker than the void behind them. */
-  storm: [0.035, 0.020, 0.031] as RGB,
+  /** The void between filaments. Almost pure black for an OLED techy look. */
+  deep: [0.008, 0.008, 0.016] as RGB,
+  /** Base gas: Very dark indigo/blue to keep the background clean. */
+  mid: [0.024, 0.031, 0.071] as RGB,
+  /** Mid-density emission — Dimmed techy cyan so dots pop. */
+  light: [0.034, 0.245, 0.310] as RGB,
+  /** Hot cores — Faint vivid cyan. */
+  pale: [0.090, 0.376, 0.392] as RGB,
+  /** Ionisation fronts — Dimmed neon magenta/pink for a subtle sharp contrast. */
+  cirrus: [0.364, 0.064, 0.256] as RGB,
+  /** Dust lanes. Opaque and near black to cut sharply through the neon. */
+  storm: [0.004, 0.004, 0.008] as RGB,
 } as const;
 
 /**
@@ -80,14 +80,13 @@ export const DOMAIN_TERRAIN_TINT: readonly RGB[] = [
 export const CITY_LIGHT: RGB = [0.451, 0.855, 1.0];
 
 /**
- * Neptune's atmosphere is thin and high, so the rim is a tight bright line
- * rather than the wide bloom Earth gets. The violet outer scatter is what sells
- * an ice giant specifically.
+ * Alien X Outline
+ * A crisp, sharp white/cyan silhouette edge. No wide atmospheric scatter.
  */
 export const ATMOSPHERE = {
-  edge: [0.729, 0.882, 1.0] as RGB,
-  rim: [0.302, 0.549, 0.973] as RGB,
-  scatter: [0.400, 0.353, 0.847] as RGB,
+  edge: [0.9, 1.0, 1.0] as RGB, // Crisp white/cyan edge
+  rim: [0.5, 0.8, 1.0] as RGB,  // Faint cyan inner glow
+  scatter: [0.0, 0.0, 0.0] as RGB, // No outer scatter for a hard silhouette
 } as const;
 
 /**
@@ -114,17 +113,18 @@ export const ATMOSPHERE = {
  * be legible crossing a lit region of the medium.
  */
 export const ARC_KIND_COLOR: readonly RGB[] = [
-  [1.0, 0.671, 0.259] as RGB, // 0 depends_on — amber
+  [1.0, 0.671, 0.259] as RGB, // 0 depends_on (outdegree) — amber
   [0.302, 0.788, 0.847] as RGB, // 1 similar_to — cyan
   [0.706, 0.510, 0.973] as RGB, // 2 used_with — violet
+  [0.9, 0.2, 0.5] as RGB,       // 3 dependent_on (indegree) — magenta
 ];
 
-/** Deep space with a trace of blue, so the rim has somewhere to fall off to. */
-export const SPACE: RGB = [0.004, 0.006, 0.016];
+/** Deep space: Pure black void so the starry globe stands out. */
+export const SPACE: RGB = [0.0, 0.0, 0.0];
 
-/** Nebula clouds in the background — dim, large, and slow. */
+/** Nebula clouds in the background — removed for Alien X vibe. */
 export const NEBULA = {
-  warm: [0.361, 0.153, 0.318] as RGB, // dusty magenta
-  cool: [0.098, 0.180, 0.400] as RGB, // cold blue
-  core: [0.290, 0.318, 0.545] as RGB, // where they overlap
+  warm: [0.0, 0.0, 0.0] as RGB, 
+  cool: [0.0, 0.0, 0.0] as RGB, 
+  core: [0.0, 0.0, 0.0] as RGB, 
 } as const;

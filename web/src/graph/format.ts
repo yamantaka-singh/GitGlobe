@@ -151,6 +151,7 @@ export interface Neighbour {
   node: number;
   weight: number;
   outgoing: boolean;
+  kind: number;
 }
 
 /**
@@ -168,7 +169,12 @@ export function neighboursOf(graph: RepoGraph, node: number, limit = 64): Neighb
   const out: Neighbour[] = [];
   for (let k = start; k < end; k++) {
     const w = graph.weights[k];
-    out.push({ node: graph.targets[k], weight: w & WEIGHT_MASK, outgoing: (w & WEIGHT_OUTGOING) !== 0 });
+    out.push({ 
+      node: graph.targets[k], 
+      weight: w & WEIGHT_MASK, 
+      outgoing: (w & WEIGHT_OUTGOING) !== 0,
+      kind: edgeKind(w)
+    });
   }
   if (out.length <= limit) return out;
   out.sort((p, q) => q.weight - p.weight);

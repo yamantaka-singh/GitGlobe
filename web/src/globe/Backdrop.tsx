@@ -433,9 +433,9 @@ type RGBTuple = readonly [number, number, number];
 export function Atmosphere({ radius }: { radius: number }) {
   return (
     <>
-      <Shell radius={radius * 1.004} color={ATMOSPHERE.edge} intensity={0.42} power={22} sunBias={0.45} renderOrder={3} />
-      <Shell radius={radius * 1.035} color={ATMOSPHERE.rim} intensity={0.78} power={6.5} sunBias={0.62} renderOrder={4} />
-      <Shell radius={radius * 1.20} color={ATMOSPHERE.scatter} intensity={0.40} power={2.2} sunBias={0.78} renderOrder={5} />
+      {/* Alien X Outline - uniform 360 glow, zero sunBias so it's a perfect silhouette cut-out */}
+      <Shell radius={radius * 1.008} color={ATMOSPHERE.edge} intensity={0.9} power={20} sunBias={0.0} renderOrder={3} />
+      <Shell radius={radius * 1.02} color={ATMOSPHERE.rim} intensity={0.5} power={8} sunBias={0.0} renderOrder={4} />
     </>
   );
 }

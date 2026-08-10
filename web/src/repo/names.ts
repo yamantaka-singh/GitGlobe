@@ -77,6 +77,10 @@ export function hasRealNames(): boolean {
   return realNames.length > 0;
 }
 
+export function findGlobalIdByName(fullName: string): number {
+  return realNames.indexOf(fullName);
+}
+
 /** Test seam — resets module state between cases. */
 export function clearNames(): void {
   realNames.length = 0;

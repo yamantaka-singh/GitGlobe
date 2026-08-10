@@ -8,6 +8,8 @@ import { DOMAIN_PALETTE } from '../globe/shaders';
 import { repoIdentity } from '../repo/names';
 import { Reticle } from './Reticle';
 import { Intro } from './Intro';
+import { RepoDetailPanel } from './RepoDetailPanel';
+import { SearchBox } from './SearchBox';
 
 function rgb(i: number) {
   const c = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length];
@@ -111,6 +113,8 @@ export function Hud() {
           ))}
         </nav>
 
+        <SearchBox />
+
         <button
           className="topbar__toggle"
           onClick={() => useGlobeStore.getState().setShowTelemetry(!showTelemetry)}
@@ -122,17 +126,11 @@ export function Hud() {
 
       {entered && showTelemetry && <Telemetry />}
 
-      {entered && (
+      {entered && <RepoDetailPanel />}
+
+      {entered && selectedId === -1 && (
         <div className="readout">
-          {selected ? (
-            <>
-              <i style={{ background: rgb(selected.domain) }} />
-              <strong>{repoIdentity(selected.repoId, selected.domain).fullName}</strong>
-              <span className="muted">
-                {focusArcCount} connections · click again to release
-              </span>
-            </>
-          ) : hoveredId >= 0 ? (
+          {hoveredId >= 0 ? (
             <span className="muted">↳ click to pin this node and hold its connections</span>
           ) : (
             <span className="muted">↳ drag to orbit · scroll to zoom · hover a node</span>
