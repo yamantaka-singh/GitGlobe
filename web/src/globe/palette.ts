@@ -80,13 +80,13 @@ export const DOMAIN_TERRAIN_TINT: readonly RGB[] = [
 export const CITY_LIGHT: RGB = [0.451, 0.855, 1.0];
 
 /**
- * Alien X Outline
- * A crisp, sharp white/cyan silhouette edge. No wide atmospheric scatter.
+ * Atmosphere Outline
+ * A solid black border/silhouette.
  */
 export const ATMOSPHERE = {
-  edge: [0.9, 1.0, 1.0] as RGB, // Crisp white/cyan edge
-  rim: [0.5, 0.8, 1.0] as RGB,  // Faint cyan inner glow
-  scatter: [0.0, 0.0, 0.0] as RGB, // No outer scatter for a hard silhouette
+  edge: [0.0, 0.0, 0.0] as RGB, // Pure black
+  rim: [0.0, 0.0, 0.0] as RGB, // Pure black
+  scatter: [0.0, 0.0, 0.0] as RGB,
 } as const;
 
 /**
