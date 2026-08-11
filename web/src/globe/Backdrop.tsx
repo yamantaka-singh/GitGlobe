@@ -176,9 +176,9 @@ export function Starfield({ count = 3600, radius = 60 }: { count?: number; radiu
       const k = Math.random();
       const c =
         k < 0.62 ? [0.78, 0.84, 1.0] :
-        k < 0.86 ? [1.0, 0.98, 0.92] :
-        k < 0.96 ? [1.0, 0.86, 0.68] :
-                   [1.0, 0.72, 0.62];
+          k < 0.86 ? [1.0, 0.98, 0.92] :
+            k < 0.96 ? [1.0, 0.86, 0.68] :
+              [1.0, 0.72, 0.62];
       tint[i * 3] = c[0];
       tint[i * 3 + 1] = c[1];
       tint[i * 3 + 2] = c[2];
@@ -251,30 +251,26 @@ const PLANET_FRAG = /* glsl */ `
     vec4 surf = texture2D(uSurface, vUv);
     // Until the bake lands, fall back to flat ocean rather than black — a
     // one-frame black sphere reads as a load failure.
-    // Darkened base albedo slightly to reduce overall front-side glare
-    vec3 albedo = mix(uFallback, surf.rgb, uHasSurface) * 0.85;
+    // Restore full albedo base brightness
+    vec3 albedo = mix(uFallback, surf.rgb, uHasSurface);
     float cityLights = surf.a * uHasSurface;
 
     // ---- emission ----------------------------------------------------------
     // A nebula is self-luminous, so there is no terminator to speak of. The sun
     // term is kept only as a weak modelling cue: with no directional variation
     // at all a sphere of glowing gas flattens into a disc and the globe stops
-    // reading as a globe. uNightFloor is therefore high rather than near
-    // zero - it sets how much of the surface is visible independent of the
-    // light, which for gas is nearly all of it.
+    // reading as a globe.
     float sun = dot(n, normalize(uSunDir));
     float day = smoothstep(-uTerminator, uTerminator, sun);
 
     vec3 rgb = albedo * (uNightFloor + (1.0 - uNightFloor) * day);
 
-    // The gas glows its OWN colour. Routing emission through a single fixed
-    // tint - which is what the ice giant's aurora did - would erase the domain
-    // hue exactly where the gas is densest, and density is where territories
-    // are. A small cyan lift stands in for the OIII line sitting on top.
     float night = 1.0 - day;
-    // Reduced emissive punch so the clusters don't glow too aggressively
-    vec3 emissive = albedo * 1.2 + uCityLight * 0.15;
-    rgb += emissive * cityLights * (0.62 + 0.38 * night);
+    // Boost base emissive so repos glow brightly, but balance it heavily towards the night side
+    // Front side (night=0): multiplier is 0.25 (keeps day from glaring)
+    // Back side (night=1): multiplier is 1.25 (keeps night bright and punchy)
+    vec3 emissive = albedo * 1.45 + uCityLight * 0.25;
+    rgb += emissive * cityLights * (0.25 + 1.0 * night);
 
     // ---- graticule ---------------------------------------------------------
     // Kept very faint now that there is terrain to read. It exists to say
@@ -311,7 +307,7 @@ export function Planet({ radius, surface }: { radius: number; surface: THREE.Tex
           // silhouette against space and the globe looks bitten into.
           // The residual directional variation is what keeps the sphere
           // from flattening into a disc.
-          uNightFloor: { value: 0.95 },
+          uNightFloor: { value: 1.0 },
           // A gas giant's atmosphere is deep, so its terminator is soft. A hard
           // edge is the tell that you are looking at a lit sphere, not a world.
           uTerminator: { value: 0.42 },

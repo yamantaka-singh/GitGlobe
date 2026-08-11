@@ -21,10 +21,12 @@ from gitglobe.rank.calibrate import (  # noqa: E402
 )
 from gitglobe.rank.global_scale import (  # noqa: E402
     STAR_LADDER,
+    STAR_REFERENCE_MAX,
     StarScale,
     Weights,
     dependents_percentile,
     monotonic_repair,
+    star_magnitude,
 )
 
 
@@ -126,6 +128,56 @@ class TestScaleRejectsBadMeasurements(unittest.TestCase):
         self.assertGreater(len(STAR_LADDER), 20)
         # Dense at the bottom, where almost every repository actually lives.
         self.assertGreaterEqual(sum(1 for s in STAR_LADDER if s <= 100), 10)
+
+
+class TestStarMagnitude(unittest.TestCase):
+    """The star ruler used by the score, as opposed to the one shown to users.
+
+    `scale.percentile` is a real measurement and stays for display. It is not
+    usable as a ranking signal here: this corpus starts at 66 stars, which is
+    already GitHub's 99.84th percentile, so percentile spread across the entire
+    corpus was 0.0016 — a flat offset that ordered nothing.
+    """
+
+    def test_does_not_depend_on_any_corpus(self) -> None:
+        # THE property, and the reason this is not a percentile or a rank.
+        # A percentile answers "compared to whom", so it moves when the corpus
+        # grows. Resuming ingest must not resize a repository that has not
+        # changed. There is deliberately no corpus argument to pass.
+        self.assertEqual(star_magnitude(50_000), star_magnitude(50_000))
+        import inspect
+        params = inspect.signature(star_magnitude).parameters
+        self.assertNotIn("corpus", params)
+        self.assertNotIn("scale", params)
+
+    def test_bounded_and_monotone(self) -> None:
+        previous = -1.0
+        for stars in (0, 1, 66, 1_000, 10_000, 100_000, 500_000, 5_000_000):
+            value = star_magnitude(stars)
+            with self.subTest(stars=stars):
+                self.assertGreaterEqual(value, 0.0)
+                self.assertLessEqual(value, 1.0)
+                self.assertGreaterEqual(value, previous)
+            previous = value
+
+    def test_separates_the_titans(self) -> None:
+        # The failure a percentile has: 20k and 200k stars must not look alike.
+        # Both are far above any percentile's resolution, so this is the check
+        # that the new ruler actually fixed the thing it was chosen to fix.
+        gap = star_magnitude(200_000) - star_magnitude(20_000)
+        self.assertGreater(gap, 0.25, "famous repositories still compress together")
+
+    def test_lifts_the_floor_off_zero(self) -> None:
+        # The other half: a cube root or a linear scale crushes the bottom of
+        # the corpus into one indistinguishable band.
+        self.assertGreater(star_magnitude(1_000) - star_magnitude(66), 0.10)
+
+    def test_saturates_rather_than_exceeding_one(self) -> None:
+        self.assertEqual(star_magnitude(STAR_REFERENCE_MAX * 100), 1.0)
+
+    def test_negative_and_zero_are_the_floor_not_an_exception(self) -> None:
+        self.assertEqual(star_magnitude(0), 0.0)
+        self.assertEqual(star_magnitude(-5), 0.0)
 
 
 class TestDependentsPercentile(unittest.TestCase):

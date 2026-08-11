@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGlobeStore } from '../store/useGlobeStore';
 import { globeCamera } from '../camera/Rig';
+import { group } from './num';
 
 /**
  * The entry moment.
@@ -63,7 +64,7 @@ export function Intro() {
         <dl className="intro__meta">
           <div>
             <dt>nodes</dt>
-            <dd>{totalPoints ? totalPoints.toLocaleString() : '—'}</dd>
+            <dd>{totalPoints ? group(totalPoints) : '—'}</dd>
           </div>
           <div>
             <dt>graph</dt>

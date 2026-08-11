@@ -1,8 +1,10 @@
 import { useGlobeStore } from '../store/useGlobeStore';
 import { sceneIndex } from '../globe/Scene';
 import { repoIdentity } from '../repo/names';
+import { rarity, scoresFor } from '../repo/scores';
 import { DOMAIN_PALETTE } from '../globe/shaders';
-import { degreeOf, rankPercentile } from '../graph/format';
+import { degreeOf } from '../graph/format';
+import { group } from './num';
 
 function rgb(i: number) {
   const c = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length];
@@ -33,8 +35,10 @@ export function Reticle() {
   const graph = sceneIndex.graph;
 
   const degree = graph ? degreeOf(graph, hoveredId) : { in: 0, out: 0 };
-  const rank = graph ? graph.rank[hoveredId] : 0;
-  const percentile = graph && sceneIndex.sortedRanks ? rankPercentile(sceneIndex.sortedRanks, rank) : 0;
+  // Same measured global scale as the detail panel. This card used to show an
+  // in-corpus PageRank percentile labelled "top X%", which was both a different
+  // number and a different meaning from the panel one click later.
+  const scores = scoresFor(hoveredId);
   const colour = rgb(ref.domain);
 
   // Flip the card to whichever side has room, so it never runs off the edge.
@@ -74,11 +78,17 @@ export function Reticle() {
           <dt>domain</dt>
           <dd style={{ color: colour }}>{domains[ref.domain] ?? '—'}</dd>
           <dt>rank</dt>
-          <dd>top {((1 - percentile) * 100).toFixed(percentile > 0.99 ? 2 : 1)}%</dd>
+          <dd>{rarity(scores.starRank)}</dd>
+          {scores.score !== undefined && (
+            <>
+              <dt>score</dt>
+              <dd>{scores.score.toFixed(1)}</dd>
+            </>
+          )}
           <dt>dependents</dt>
-          <dd>{degree.in.toLocaleString()}</dd>
+          <dd>{group(degree.in)}</dd>
           <dt>depends on</dt>
-          <dd>{degree.out.toLocaleString()}</dd>
+          <dd>{group(degree.out)}</dd>
         </dl>
         {selectedId === hoveredId && <div className="reticle-card__pinned">↳ selected</div>}
       </div>

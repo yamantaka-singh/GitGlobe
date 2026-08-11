@@ -315,6 +315,9 @@ class ManifestBand:
     #: Band-aligned repository names. Entry i is the name of point i in this
     #: band's tile, so no id lookup is needed on the client.
     names: str | None = None
+    #: Band-aligned scores — global rank and brain composite — as columns.
+    #: Optional so a corpus built before `calibrate` and `learn` still loads.
+    meta: str | None = None
 
 
 @dataclass
@@ -351,6 +354,7 @@ class Manifest:
                     "bytes": b.bytes,
                     "file": b.file,
                     **({"names": b.names} if b.names else {}),
+                    **({"meta": b.meta} if b.meta else {}),
                 }
                 for b in self.bands
             ],

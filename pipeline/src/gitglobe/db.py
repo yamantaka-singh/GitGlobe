@@ -445,6 +445,193 @@ class Database:
         async with self.pool.acquire() as conn:
             return [dict(r) for r in await conn.fetch(query)]
 
+    # ------------------------------------------------------------------ brain
+
+    #: Teacher and student share `repo_score`, separated by this column.
+    TEACHER = 0
+    STUDENT = 1
+
+    async def rows_for_teacher(self) -> list[dict[str, Any]]:
+        """Candidates the teacher could rate, with everything the prompt needs.
+
+        `days_since_push` is here because the sampler stratifies on it: rating
+        4,000 rows drawn only from what is popular would teach the student that
+        popularity is the signal, which is the one thing the rubric forbids.
+
+        Deliberately NOT filtered by what has already been rated — `teach`
+        samples from the full population and then skips what it holds, so an
+        interrupted run resumes into the same stratified sample instead of
+        drawing a fresh one from whatever is left.
+        """
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(
+                """
+                SELECT r.id, r.full_name, r.description, r.language, r.topics,
+                       r.license, r.clean_text, r.content_hash,
+                       COALESCE(r.stars, 0) AS stars,
+                       COALESCE(r.domain, 0) AS domain,
+                       COALESCE(EXTRACT(EPOCH FROM (now() - r.pushed_at)) / 86400,
+                                3650)::float AS days_since_push
+                FROM repo r
+                WHERE NOT r.low_signal
+                  AND r.clean_text IS NOT NULL
+                  AND length(r.clean_text) > 0
+                ORDER BY r.id
+                """
+            )]
+
+    async def brain_rows(self) -> list[dict[str, Any]]:
+        """Every column `brain.features.build_features` reads, for every repo.
+
+        Unfiltered on purpose: the teacher rates a sample, but the student must
+        predict for the whole corpus, so this is the population — filtering here
+        would silently shrink what the globe can show.
+
+        README *lengths* are measured in SQL rather than fetching the text.
+        `build_features` only ever calls `len()` on them, and at ~8,700 chars
+        per row across `clean_text` and `readme_raw` the naive version moved
+        most of a gigabyte through the driver — growing linearly with the
+        corpus — to produce two floats per repository.
+        """
+        async with self.pool.acquire() as conn:
+            return [dict(r) for r in await conn.fetch(
+                """
+                SELECT r.id, r.full_name, r.description, r.language, r.topics,
+                       r.license, r.dropped_sections,
+                       COALESCE(length(r.clean_text), 0) AS readme_chars,
+                       COALESCE(length(r.readme_raw), 0) AS raw_readme_chars,
+                       r.created_at, r.pushed_at, r.is_fork, r.is_archived,
+                       r.low_signal, r.non_english, r.cluster_id, r.domain,
+                       r.content_hash, r.stars, r.stars_90d, r.criticality,
+                       -- Read by build_features and previously not selected, so
+                       -- `forks`, `open_issues` and `clean_reduction` were all
+                       -- constant zero — along with `fork_ratio` and
+                       -- `issues_per_star`, which derive from them. Five dead
+                       -- columns out of 55, silent because a missing key
+                       -- becomes the neutral value rather than an error.
+                       r.forks, r.open_issues, r.clean_reduction
+                FROM repo r
+                ORDER BY r.id
+                """
+            )]
+
+    async def graph_features(self) -> tuple:
+        """(rank, in_degree, out_degree, similar_degree) dicts keyed by repo id.
+
+        Degrees are split by edge kind because they mean different things: an
+        in-degree over `depends_on` is a fact about the world, while one over
+        `similar_to` is a fact about our own k-NN step. Merging them would let
+        the corpus vote on its own importance.
+
+        Queries `edge` directly rather than reusing `relatedness_edges`, which
+        filters `similar_to` out on purpose for PageRank — reusing it here would
+        leave `similar_degree` silently zero for every repository.
+        """
+        in_deg: dict = {}
+        out_deg: dict = {}
+        similar: dict = {}
+        async with self.pool.acquire() as conn:
+            ranks = {
+                int(r["repo_id"]): float(r["rank"] or 0.0)
+                for r in await conn.fetch("SELECT repo_id, rank FROM repo_relatedness")
+            }
+            for row in await conn.fetch("SELECT src, dst, kind FROM edge"):
+                src, dst = int(row["src"]), int(row["dst"])
+                if int(row["kind"]) == 1:      # similar_to is undirected
+                    similar[src] = similar.get(src, 0) + 1
+                    similar[dst] = similar.get(dst, 0) + 1
+                else:
+                    out_deg[src] = out_deg.get(src, 0) + 1
+                    in_deg[dst] = in_deg.get(dst, 0) + 1
+        return ranks, in_deg, out_deg, similar
+
+    async def store_scores(self, scores: dict[int, dict], *, source: int,
+                           model: str = "", hashes: dict[int, str] | None = None) -> int:
+        """Upsert teacher or student scores.
+
+        Upsert rather than insert so a re-run repairs rows instead of failing on
+        the primary key — which matters because `rate_many` checkpoints every
+        200 rows and a resumed run will re-touch the tail of the last batch.
+        """
+        if not scores:
+            return 0
+        hashes = hashes or {}
+        payload = [
+            (rid, source,
+             s.get("maintenance"), s.get("production_readiness"), s.get("specificity"),
+             s.get("learning_value"), s.get("onboarding_ease"), s.get("canonicity"),
+             s.get("summary"), list(s.get("flags") or []),
+             hashes.get(rid), model)
+            for rid, s in scores.items()
+        ]
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
+                INSERT INTO repo_score (
+                    repo_id, source, maintenance, production_readiness, specificity,
+                    learning_value, onboarding_ease, canonicity, summary, flags,
+                    scored_hash, model
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                ON CONFLICT (repo_id, source) DO UPDATE SET
+                    maintenance = EXCLUDED.maintenance,
+                    production_readiness = EXCLUDED.production_readiness,
+                    specificity = EXCLUDED.specificity,
+                    learning_value = EXCLUDED.learning_value,
+                    onboarding_ease = EXCLUDED.onboarding_ease,
+                    canonicity = EXCLUDED.canonicity,
+                    summary = EXCLUDED.summary,
+                    flags = EXCLUDED.flags,
+                    scored_hash = EXCLUDED.scored_hash,
+                    model = EXCLUDED.model,
+                    scored_at = now()
+                """,
+                payload,
+            )
+        return len(payload)
+
+    async def scores(self, *, source: int) -> dict[int, dict[str, Any]]:
+        """Stored scores by repo id. Rows whose README changed are excluded.
+
+        A judgement of a README that no longer exists is worse than no
+        judgement: it is wrong and it looks current. `scored_hash` is what makes
+        that detectable, and this is the only place it is enforced.
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT s.repo_id, s.maintenance, s.production_readiness, s.specificity,
+                       s.learning_value, s.onboarding_ease, s.canonicity, s.summary, s.flags
+                FROM repo_score s JOIN repo r ON r.id = s.repo_id
+                WHERE s.source = $1
+                  AND (s.scored_hash IS NULL OR s.scored_hash = r.content_hash)
+                """,
+                source,
+            )
+        return {int(r["repo_id"]): dict(r) for r in rows}
+
+    async def start_brain_run(self, **fields) -> int:
+        keys = ", ".join(fields)
+        holes = ", ".join(f"${i + 1}" for i in range(len(fields)))
+        async with self.pool.acquire() as conn:
+            return int(await conn.fetchval(
+                f"INSERT INTO brain_run ({keys}) VALUES ({holes}) RETURNING id",
+                *fields.values(),
+            ))
+
+    async def finish_brain_run(self, run_id: int, *, metrics: dict | None = None,
+                               student_n: int = 0, notes: str = "") -> None:
+        import json
+
+        async with self.pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE brain_run
+                   SET finished_at = now(), metrics = $2, student_n = $3, notes = $4
+                 WHERE id = $1
+                """,
+                run_id, json.dumps(metrics or {}), student_n, notes,
+            )
+
     async def store_embeddings(self, vectors: dict[int, bytes], dim: int) -> int:
         """Persist a batch. `embedded_hash` is copied from the CURRENT
         `content_hash`, which is what makes the next run skip these rows."""
@@ -503,6 +690,69 @@ class Database:
                 )
         return len(payload)
 
+    async def store_star_scale(self, thresholds: list, counts: list, *,
+                               total_repos: int, repaired: int = 0, notes: str = "") -> int:
+        """Record a measured star survival function, return its run id.
+
+        A run rather than an overwrite because every global score is computed
+        against one of these. Without the history, "why did this score change"
+        cannot distinguish the repository moving from the yardstick moving.
+        """
+        if len(thresholds) != len(counts):
+            raise ValueError(f"thresholds/counts differ: {len(thresholds)}, {len(counts)}")
+        async with self.pool.acquire() as conn:
+            return int(await conn.fetchval(
+                """
+                INSERT INTO star_scale_run (thresholds, counts, total_repos, repaired, notes)
+                VALUES ($1, $2, $3, $4, $5) RETURNING id
+                """,
+                [int(t) for t in thresholds], [int(c) for c in counts],
+                int(total_repos), int(repaired), notes,
+            ))
+
+    async def latest_star_scale(self) -> dict[str, Any] | None:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, thresholds, counts, total_repos, measured_at, repaired "
+                "FROM star_scale_run ORDER BY measured_at DESC LIMIT 1"
+            )
+        return dict(row) if row else None
+
+    async def store_global_ranks(self, ranks: dict, scale_id: int | None) -> int:
+        """Write the 0-100 global composite for every scored repository."""
+        if not ranks:
+            return 0
+        payload = [
+            (int(rid), float(r.score), int(r.star_rank), float(r.star_percentile),
+             json.dumps(r.components), scale_id)
+            for rid, r in ranks.items()
+        ]
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.executemany(
+                    """
+                    INSERT INTO repo_global_rank
+                        (repo_id, score, star_rank, star_percentile, components,
+                         scale_id, computed_at)
+                    VALUES ($1, $2, $3, $4, $5::jsonb, $6, now())
+                    ON CONFLICT (repo_id) DO UPDATE SET
+                        score = EXCLUDED.score,
+                        star_rank = EXCLUDED.star_rank,
+                        star_percentile = EXCLUDED.star_percentile,
+                        components = EXCLUDED.components,
+                        scale_id = EXCLUDED.scale_id,
+                        computed_at = EXCLUDED.computed_at
+                    """,
+                    payload,
+                )
+        return len(payload)
+
+    async def global_ranks(self) -> dict[int, float]:
+        """repo_id -> 0-100 composite, for the tile builder and the HUD."""
+        async with self.pool.acquire() as conn:
+            return {int(r["repo_id"]): float(r["score"])
+                    for r in await conn.fetch("SELECT repo_id, score FROM repo_global_rank")}
+
     async def store_ranks(self, ranks: dict[int, float]) -> int:
         if not ranks:
             return 0
@@ -557,15 +807,35 @@ class Database:
 
         Only rows with a position: an embedded repository that has not been
         projected has no place on the globe yet.
+
+        `criticality` and `stars_90d` are here because `stage_calibrate` scores
+        from these rows and `signals_for` reads both. They were missing once,
+        and because that function turns an absent key into the neutral value
+        rather than raising, the effect was not an error: 84,434 backfilled
+        criticality scores were silently discarded on read and the composite
+        came back byte-identical. Any column the score reads must be selected
+        here, or it fails quietly and looks like the data was wrong.
         """
         async with self.pool.acquire() as conn:
             return [dict(r) for r in await conn.fetch(
                 """
                 SELECT r.id, r.full_name, r.theta, r.phi, r.domain, r.cluster_id,
                        r.stars, r.low_signal, r.is_archived, r.is_fork,
-                       COALESCE(rr.rank, 0.0) AS rank
+                       r.criticality, r.stars_90d,
+                       COALESCE(rr.rank, 0.0) AS rank,
+                       gr.score AS global_score, gr.star_rank, gr.star_percentile,
+                       -- Mean of whatever dimensions the student was allowed to
+                       -- keep. avg() over unnest skips NULLs, so a dimension
+                       -- that failed its baseline check is absent from the mean
+                       -- rather than counted as zero.
+                       (SELECT avg(v) FROM unnest(ARRAY[
+                            rs.maintenance, rs.production_readiness, rs.specificity,
+                            rs.learning_value, rs.onboarding_ease, rs.canonicity
+                        ]) v WHERE v IS NOT NULL) AS brain_score
                 FROM repo r
                 LEFT JOIN repo_relatedness rr ON rr.repo_id = r.id
+                LEFT JOIN repo_global_rank gr ON gr.repo_id = r.id
+                LEFT JOIN repo_score rs ON rs.repo_id = r.id AND rs.source = 1
                 WHERE r.theta IS NOT NULL AND r.phi IS NOT NULL
                 ORDER BY r.id
                 """

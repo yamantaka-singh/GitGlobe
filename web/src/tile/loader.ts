@@ -1,4 +1,5 @@
 import { registerNames } from '../repo/names';
+import { registerScores } from '../repo/scores';
 import { decodeTile, type Tile } from './format';
 
 export interface GraphManifest {
@@ -18,7 +19,12 @@ export interface TileManifest {
   total: number;
   synthetic: boolean;
   /** `names` is present on pipeline-built worlds and absent on synthetic ones. */
-  bands: Array<{ band: number; count: number; bytes: number; file: string; names?: string }>;
+  bands: Array<{
+    band: number; count: number; bytes: number; file: string;
+    names?: string;
+    /** Score columns; absent on worlds built before `calibrate`/`learn` ran. */
+    meta?: string;
+  }>;
   domains: string[];
   /** Absent on pre-v2 worlds generated before the graph existed. */
   graph?: GraphManifest;
@@ -92,6 +98,30 @@ export async function fetchBand(
     } catch (err) {
       if ((err as Error)?.name !== 'AbortError') {
         console.warn(`Could not load ${entry.names}; falling back to generated names.`, err);
+      }
+    }
+  }
+
+  // Same contract as names: fetched after the tile, never blocking it, and a
+  // failure degrades to "not scored" rather than to an empty globe.
+  if (entry.meta) {
+    try {
+      const metaRes = await fetch(`${TILE_ROOT}${entry.meta}`, { signal });
+      if (metaRes.ok) {
+        const columns = await metaRes.json();
+        const length = columns.score?.length ?? columns.starRank?.length ?? 0;
+        if (length && length !== tile.count) {
+          console.warn(
+            `${entry.meta} has ${length} rows for ${tile.count} points — ` +
+              `scores and tiles are out of sync. Rebuild.`,
+          );
+        } else {
+          registerScores(idOffset, tile.count, columns);
+        }
+      }
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.warn(`Could not load ${entry.meta}; scores will show as unranked.`, err);
       }
     }
   }

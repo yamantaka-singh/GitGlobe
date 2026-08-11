@@ -5,11 +5,11 @@ import { useGlobeStore } from '../store/useGlobeStore';
 import { globeCamera } from '../camera/Rig';
 import { sceneIndex } from '../globe/Scene';
 import { DOMAIN_PALETTE } from '../globe/shaders';
-import { repoIdentity } from '../repo/names';
 import { Reticle } from './Reticle';
 import { Intro } from './Intro';
 import { RepoDetailPanel } from './RepoDetailPanel';
 import { SearchBox } from './SearchBox';
+import { group } from './num';
 
 function rgb(i: number) {
   const c = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length];
@@ -52,10 +52,8 @@ export function Hud() {
   const showTelemetry = useGlobeStore((s) => s.showTelemetry);
   const selectedId = useGlobeStore((s) => s.selectedId);
   const hoveredId = useGlobeStore((s) => s.hoveredId);
-  const focusArcCount = useGlobeStore((s) => s.focusArcCount);
 
   const domains = sceneIndex.manifest?.domains ?? [];
-  const selected = sceneIndex.resolve(selectedId);
 
   const flyToDomain = (index: number) => {
     const store = useGlobeStore.getState();
@@ -169,13 +167,13 @@ function Telemetry() {
 
       <dl className="stats">
         <dt>nodes</dt>
-        <dd>{totalPoints.toLocaleString()}</dd>
+        <dd>{group(totalPoints)}</dd>
         <dt>bands</dt>
         <dd>{loadedBands.join(' ') || '—'}</dd>
         <dt>edges</dt>
-        <dd>{graphMeta ? graphMeta.directedEdges.toLocaleString() : '—'}</dd>
+        <dd>{graphMeta ? group(graphMeta.directedEdges) : '—'}</dd>
         <dt>backbone</dt>
-        <dd>{graphReady ? ambientArcCount.toLocaleString() : '—'}</dd>
+        <dd>{graphReady ? group(ambientArcCount) : '—'}</dd>
         <dt>focus arcs</dt>
         <dd className={focusArcCount > 0 ? 'live' : undefined}>{focusArcCount || '—'}</dd>
         <dt>tier</dt>
@@ -190,7 +188,7 @@ function Telemetry() {
           {graphMeta.pagerank.converged ? 'converged' : 'CAPPED'}
           <br />
           degree med {graphMeta.degree.p50} · p99 {graphMeta.degree.p99} · max{' '}
-          {graphMeta.degree.max.toLocaleString()}
+          {group(graphMeta.degree.max)}
         </p>
       )}
 

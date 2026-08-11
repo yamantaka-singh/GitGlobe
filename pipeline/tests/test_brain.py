@@ -192,8 +192,23 @@ class TestTeacherConfigAndPacing(unittest.TestCase):
         c = TeacherConfig(provider="nim")
         self.assertEqual(c.model, NIM_DEFAULT_MODEL)
         self.assertEqual(c.requests_per_minute, 40.0)
-        # More workers than the rate allows would only queue up waiting.
-        self.assertLessEqual(c.concurrency, 8)
+
+        # This used to assert concurrency <= 8, on the reasoning that more
+        # workers than the rate allows would only queue up waiting. A real run
+        # disproved it: 8 workers against a ~90s reasoning call produced 5
+        # requests a minute, an eighth of the 40/min limit, and the limiter
+        # never bound at all. Workers to saturate a rate limit is rate x
+        # latency — 40/min x 90s — so the floor is well above 8.
+        self.assertGreaterEqual(c.concurrency, 40)
+        # The RateLimiter, not this number, is what enforces the quota.
+        self.assertGreater(c.requests_per_minute, 0)
+
+    def test_an_explicit_concurrency_is_respected(self) -> None:
+        from gitglobe.brain.teacher import TeacherConfig
+
+        # The escape hatch for when NIM returns 503s faster than the retry
+        # budget absorbs them.
+        self.assertEqual(TeacherConfig(provider="nim", concurrency=4).concurrency, 4)
 
     def test_vertex_defaults_are_unpaced(self) -> None:
         from gitglobe.brain.teacher import DEFAULT_TEACHER_MODEL, TeacherConfig

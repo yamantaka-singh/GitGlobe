@@ -132,6 +132,24 @@ class GraphFeatures:
     similar_degree: dict = field(default_factory=dict)
 
 
+def _length_of(rows: list[dict], text_key: str, count_key: str) -> np.ndarray:
+    """Character count, from a precomputed column if the caller supplied one.
+
+    `build_features` only ever needs the LENGTH of a README, never its content,
+    but the obvious `len(row["clean_text"])` forces every caller to ship the
+    whole corpus of text through the driver first. At ~8,700 chars per row
+    across clean_text and readme_raw, that is most of a gigabyte at 95k rows and
+    grows linearly — for two floats per repository.
+
+    So a caller may pass `readme_chars` / `raw_readme_chars` measured in SQL
+    instead. Falling back to the text keeps every existing caller working
+    unchanged, including the teacher, which genuinely needs the content.
+    """
+    if rows and rows[0].get(count_key) is not None:
+        return np.array([float(r.get(count_key) or 0) for r in rows], np.float64)
+    return np.array([len(r.get(text_key) or "") for r in rows], np.float64)
+
+
 def build_features(
     rows: list[dict],
     *,
@@ -181,8 +199,11 @@ def build_features(
         "fork_ratio": _safe_ratio(forks, np.maximum(stars, 1)),
         "issues_per_star": _safe_ratio(issues, np.maximum(stars, 1)),
         # --- shape ------------------------------------------------------
-        "readme_chars": np.array([len(r.get("clean_text") or "") for r in rows], np.float64),
-        "raw_readme_chars": np.array([len(r.get("readme_raw") or "") for r in rows], np.float64),
+        # Length only — the text itself is never a feature. A caller that has
+        # already measured it in SQL passes the count and skips transferring
+        # megabytes of README to call len() on it; `_length_of` prefers that.
+        "readme_chars": _length_of(rows, "clean_text", "readme_chars"),
+        "raw_readme_chars": _length_of(rows, "readme_raw", "raw_readme_chars"),
         # Near 1.0 means the README was almost entirely boilerplate or links —
         # the signature of an awesome-list or a badge-heavy template.
         "clean_reduction": get("clean_reduction", 0.0).astype(np.float64),

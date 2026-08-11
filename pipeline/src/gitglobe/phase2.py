@@ -923,13 +923,284 @@ async def stage_rank(db: Database, *, used_with_scale: float = 0.7) -> StageResu
     })
 
 
-async def stage_build(db: Database, out_dir: Path, *, seed: int = 42) -> StageResult:
-    """Everything in Postgres to the files the browser fetches."""
-    rows = await db.world_rows()
-    if not rows:
-        raise RuntimeError("Nothing to build — run project and cluster first.")
+async def stage_calibrate(db: Database, *, tokens: list | None = None,
+                          remeasure: bool = False) -> StageResult:
+    """Rank the corpus against all of GitHub, not just against itself.
 
-    world = WorldInput(
+    `stage_rank` produces PageRank, which answers "how important is this among
+    the repositories we happen to have". This answers "how does this stand among
+    all ~420 million public repositories" — the question a user actually has, and
+    the one a corpus-relative number cannot address as the corpus keeps growing.
+
+    The star scale is a MEASUREMENT from the GitHub search API, so it is stored
+    as a run and reused. `--remeasure` takes a fresh one; without it the most
+    recent stored scale is used, which keeps re-runs free and scores comparable.
+    """
+    from .rank.calibrate import measure_star_scale
+    from .rank.corpus import disagreement, leaderboard, rank_corpus
+    from .rank.global_scale import StarScale
+
+    stored = await db.latest_star_scale()
+    if remeasure or stored is None:
+        if not tokens:
+            raise ValueError(
+                "measuring the star scale needs a GitHub token (GITHUB_TOKEN). "
+                "Run once with --remeasure and a token; later runs reuse it."
+            )
+        log.info("Measuring the global star distribution from the GitHub search API")
+        scale = await measure_star_scale(tokens)
+        scale_id = await db.store_star_scale(
+            scale.thresholds, scale.counts, total_repos=scale.total_repos,
+            notes="gitglobe calibrate --remeasure",
+        )
+    else:
+        scale = StarScale(
+            thresholds=list(stored["thresholds"]), counts=list(stored["counts"]),
+            total_repos=int(stored["total_repos"]), measured_at=str(stored["measured_at"]),
+        )
+        scale_id = int(stored["id"])
+        log.info("Reusing star scale #%d measured %s", scale_id, scale.measured_at)
+
+    rows = await db.world_rows()
+    ranking = rank_corpus(rows, await db.relatedness_edges(), scale)
+    written = await db.store_global_ranks(ranking.ranks, scale_id)
+
+    log.info("Global rank: %s", ranking.summary())
+    return StageResult("calibrate", written, {
+        "scale_id": scale_id,
+        "measured_at": str(scale.measured_at),
+        "summary": ranking.summary(),
+        "top": leaderboard(ranking, rows, top=10),
+        "movers": disagreement(ranking, rows, top=8),
+    })
+
+
+async def stage_teach(db: Database, *, total: int = 4_000, provider: str = "nim",
+                      project: str = "", model: str = "", seed: int = 42,
+                      concurrency: int = 0, dry_run: bool = False) -> StageResult:
+    """Have an LLM rate a stratified sample, so the student has something to learn.
+
+    Everything downstream of the brain has existed for a while — the rubric, the
+    prompt guard, the sampler, the student and its 24 tests — and none of it has
+    ever run, because nothing produced labels. This is that missing step.
+
+    **Stratified, not top-N.** Rating the 4,000 most popular repositories would
+    teach the student that popularity is the target, which is precisely what
+    `rubric.FORBIDDEN_IN_PROMPT` exists to prevent. The sampler spreads the
+    budget across star band x domain x recency so the student sees quiet, good
+    software too.
+
+    **Resumable.** The sample is drawn from the full population with a fixed
+    seed, then rows already rated are removed. An interrupted run therefore
+    resumes into the same sample rather than drawing a fresh one from what is
+    left, and `rate_many` checkpoints every 200 rows regardless.
+    """
+    from .brain.sampling import plan_teaching
+    from .brain.teacher import Teacher, TeacherConfig, estimate
+
+    rows = await db.rows_for_teacher()
+    if not rows:
+        return StageResult("teach", 0, {"note": "no rows with clean text; run ingest"})
+
+    already = await db.scores(source=Database.TEACHER)
+    todo, sample = plan_teaching(rows, set(already), total=total, seed=seed)
+    mean_chars = sum(len(r["clean_text"] or "") for r in todo) / max(len(todo), 1)
+    # Built before the dry-run branch so the estimate reflects the provider that
+    # would actually run. Estimating with defaults quoted Vertex pricing and
+    # Vertex throughput for a NIM run: $3.19 for something free, 2.8 minutes for
+    # something that takes hours.
+    config = TeacherConfig(provider=provider, project=project, model=model or "",
+                           **({"concurrency": concurrency} if concurrency else {}))
+    cost = estimate(len(todo), mean_chars, config)
+
+    if dry_run or not todo:
+        return StageResult("teach", 0, {
+            "sample": sample.summary(), "already": len(already),
+            "todo": len(todo), "estimate": cost, "dry_run": True,
+        })
+
+    run_id = await db.start_brain_run(teacher_model=config.model, teacher_n=len(todo))
+    hashes = {r["id"]: r["content_hash"] for r in todo}
+
+    async def save(batch: dict) -> None:
+        # Persist as we go. At 40 requests/minute a 4,000-row pass is over an
+        # hour, and losing it to a dropped connection would be unforgivable.
+        written = await db.store_scores(batch, source=Database.TEACHER,
+                                        model=config.model, hashes=hashes)
+        log.info("Checkpointed %d teacher scores", written)
+
+    async with Teacher(config) as teacher:
+        await teacher.rate_many(todo, on_batch=save)
+
+    stats = teacher.stats
+    await db.finish_brain_run(run_id, metrics={
+        "scored": stats.scored, "unparseable": stats.unparseable,
+        "failed": stats.failed, "usd": round(stats.cost(), 2),
+        "flags": stats.flags, "failures": stats.failures,
+    }, notes="gitglobe teach")
+
+    return StageResult("teach", stats.scored, {
+        "sample": sample.summary(), "already": len(already),
+        "summary": stats.summary(), "run_id": run_id,
+        "flags": stats.flags, "failures": stats.failures,
+    })
+
+
+def _train_students(values, names: list, repo_ids, rows: list, labels: dict,
+                    labelled: list, *, seed: int) -> dict:
+    """Fit one student per rubric dimension on the labelled subset.
+
+    Split out because rule 4 refused `stage_learn` at 89 lines, and this is the
+    half with independent meaning: everything here is pure given the feature
+    matrix, so the training can be reasoned about without the database.
+    """
+    from datetime import datetime, timezone
+
+    import numpy as np
+
+    from .brain.rubric import DIMENSION_KEYS
+    from .brain.sampling import stratify, train_test_split
+    from .brain.student import fit
+
+    by_dimension = {
+        key: np.array([
+            labels[int(repo_ids[i])].get(key) or 0.0 for i in labelled
+        ], dtype=np.float64)
+        for key in DIMENSION_KEYS
+    }
+
+    # Stratified on the real cells, not a placeholder. A plain random split
+    # leaves the held-out set with a different mix of star band x domain x
+    # recency from the training set by chance, and the held-out RMSE then
+    # partly measures that difference — flattering or damning the student at
+    # random between runs, which is exactly what `beats_baseline` must not be.
+    now = datetime.now(timezone.utc)
+    picked = [rows[i] for i in labelled]
+    strata = stratify(
+        np.array([r.get("stars") or 0 for r in picked], dtype=np.float64),
+        np.array([r.get("domain") or 0 for r in picked], dtype=np.int64),
+        np.array([
+            (now - r["pushed_at"]).days if r.get("pushed_at") else 3650
+            for r in picked
+        ], dtype=np.float64),
+    )
+    train_local, test_local = train_test_split(
+        np.arange(len(labelled)), strata, seed=seed
+    )
+    return fit(values[labelled], by_dimension, names,
+               train_idx=train_local, test_idx=test_local, seed=seed)
+
+
+def _column(rows: list, key: str):
+    """Optional numeric column as float64, missing values as NaN."""
+    import numpy as np
+
+    return np.array(
+        [float(r[key]) if r.get(key) is not None else np.nan for r in rows],
+        dtype=np.float64,
+    )
+
+
+async def _store_predictions(db: Database, honest: dict, values, names: list, repo_ids,
+                             *, metrics: dict, labelled: int, seed: int) -> tuple:
+    """Predict for the whole corpus and persist, recording the run.
+
+    Only the dimensions in `honest` are written. A dimension that failed its
+    baseline check is absent from the row rather than stored as a null or a
+    default — "we could not judge this" and "this scored average" are different
+    claims, and the second one is a lie the globe would render confidently.
+    """
+    predictions: dict = {int(rid): {} for rid in repo_ids}
+    for key, student in honest.items():
+        for rid, value in zip(repo_ids, student.predict(values)):
+            predictions[int(rid)][key] = float(value)
+
+    run_id = await db.start_brain_run(teacher_n=labelled, feature_names=list(names))
+    written = await db.store_scores(predictions, source=Database.STUDENT,
+                                    model=f"student-gbm-seed{seed}")
+    await db.finish_brain_run(run_id, metrics=metrics, student_n=written,
+                              notes="gitglobe learn")
+    return written, run_id
+
+
+async def stage_learn(db: Database, *, seed: int = 11, min_labels: int = 200) -> StageResult:
+    """Train the student on the teacher's labels, then score the whole corpus.
+
+    The teacher reads READMEs and costs money per repository; the student reads
+    cheap structural features and costs nothing, so it is what actually scores
+    all 87k. Distillation only works if the student is measurably better than
+    guessing the mean, which is why nothing is stored until `beats_baseline`
+    has been checked per dimension — a model that learned nothing would
+    otherwise write 87,227 confident numbers that are all the same.
+
+    The popularity blindfold is enforced twice: `rubric` keeps stars out of the
+    teacher's prompt, and `assert_no_popularity_features` keeps them out of the
+    student's inputs. Either alone is insufficient — a student given `stars`
+    would rediscover popularity no matter how clean the labels are.
+    """
+    import numpy as np
+
+    from .brain.features import GraphFeatures, build_features
+    from .brain.student import blindfold, composite
+
+    labels = await db.scores(source=Database.TEACHER)
+    if len(labels) < min_labels:
+        return StageResult("learn", 0, {
+            "note": f"only {len(labels)} teacher labels (need {min_labels}); "
+                    f"run `gitglobe teach` first",
+        })
+
+    rows = await db.brain_rows()
+    rank, in_deg, out_deg, similar = await db.graph_features()
+    matrix = build_features(rows, graph=GraphFeatures(rank, in_deg, out_deg, similar))
+    # Drop popularity columns ONCE, and use the result for both training and
+    # prediction. `build_features` emits log_stars, log_forks, stars_per_day,
+    # log_pagerank and criticality because the globe and the global rank need
+    # them; the student is the one consumer that must not see them, or the
+    # teacher's blindfold bought nothing. Both `fit` and `Student.predict`
+    # refuse a mismatched matrix, so filtering in one place and not the other
+    # fails loudly rather than silently scoring on the wrong columns.
+    safe, safe_names = blindfold(matrix.values, matrix.names)
+
+    # Positions of the labelled rows within the full matrix. The student trains
+    # on these and predicts for everything.
+    position = {int(rid): i for i, rid in enumerate(matrix.repo_ids)}
+    labelled = [position[r] for r in labels if r in position]
+    if len(labelled) < min_labels:
+        return StageResult("learn", 0, {
+            "note": f"{len(labels)} labels but only {len(labelled)} match the corpus",
+        })
+
+    students = _train_students(safe, safe_names, matrix.repo_ids, rows, labels,
+                               labelled, seed=seed)
+    honest = {k: s for k, s in students.items() if s.holdout["beats_baseline"]}
+    metrics = {k: s.holdout for k, s in students.items()}
+    if not honest:
+        return StageResult("learn", 0, {
+            "note": "no dimension beat its baseline by more than sampling noise; "
+                    "nothing stored",
+            "metrics": metrics, "trained": len(students),
+        })
+
+    written, run_id = await _store_predictions(
+        db, honest, safe, safe_names, matrix.repo_ids,
+        metrics=metrics, labelled=len(labelled), seed=seed,
+    )
+    overall = composite(honest, safe)
+    return StageResult("learn", written, {
+        "labels": len(labelled), "features": len(safe_names),
+        "dropped_features": len(matrix.names) - len(safe_names),
+        "trained": len(students), "kept": sorted(honest),
+        "dropped": sorted(set(students) - set(honest)),
+        "metrics": metrics, "run_id": run_id,
+        "composite": {"best": float(overall.max()), "median": float(np.median(overall)),
+                      "worst": float(overall.min())},
+    })
+
+
+def _world_input(rows: list) -> "WorldInput":
+    """Postgres rows to the tile writer's input. Split out for rule 4."""
+    return WorldInput(
         repo_id=np.array([r["id"] for r in rows]),
         full_name=np.array([r["full_name"] for r in rows]),
         theta=np.array([r["theta"] for r in rows], dtype=np.float64),
@@ -942,7 +1213,22 @@ async def stage_build(db: Database, out_dir: Path, *, seed: int = 42) -> StageRe
         is_archived=np.array([bool(r["is_archived"]) for r in rows]),
         is_fork=np.array([bool(r["is_fork"]) for r in rows]),
         stars=np.array([r["stars"] or 0 for r in rows]),
+        # NaN, not 0.0, when a repository has no score: the writer turns NaN
+        # into JSON null so the panel can say "not scored" instead of showing
+        # a confident zero for something nothing ever judged.
+        global_score=_column(rows, "global_score"),
+        star_rank=_column(rows, "star_rank"),
+        brain_score=_column(rows, "brain_score"),
     )
+
+
+async def stage_build(db: Database, out_dir: Path, *, seed: int = 42) -> StageResult:
+    """Everything in Postgres to the files the browser fetches."""
+    rows = await db.world_rows()
+    if not rows:
+        raise RuntimeError("Nothing to build — run project and cluster first.")
+
+    world = _world_input(rows)
 
     index_of = {int(r["id"]): i for i, r in enumerate(rows)}
     raw = await db.relatedness_edges()

@@ -210,6 +210,31 @@ def stratified_sample(
     )
 
 
+def plan_teaching(rows: list, already: set, *, total: int = 4_000, seed: int = 42):
+    """Which rows the teacher should rate next. Returns `(todo, sample)`.
+
+    Sample from the FULL population, then subtract what is already rated. The
+    obvious alternative — filter to unrated rows and sample from those — looks
+    equivalent and is not: every resume would draw a fresh stratified sample
+    from a shrinking pool, so an interrupted 4,000-row run ends up rating far
+    more than 4,000 rows, and the strata drift a little further from the corpus
+    on each restart. Both effects are invisible in the output and cost money.
+
+    Pure so this is testable without a database, which is the whole reason it
+    lives here rather than inside the stage.
+    """
+    if not rows:
+        return [], None
+    sample = stratified_sample(
+        np.array([r["stars"] for r in rows], dtype=np.float64),
+        np.array([r["domain"] for r in rows], dtype=np.int64),
+        np.array([r["days_since_push"] for r in rows], dtype=np.float64),
+        total=total, seed=seed,
+    )
+    chosen = [rows[i] for i in sample.indices]
+    return [r for r in chosen if r["id"] not in already], sample
+
+
 def train_test_split(
     indices: np.ndarray,
     strata: dict,
