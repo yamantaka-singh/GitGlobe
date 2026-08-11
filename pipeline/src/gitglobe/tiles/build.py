@@ -84,6 +84,14 @@ class WorldInput:
     #: order or size any of it. See `importance_order`.
     stars: np.ndarray | None = None
 
+    #: What the panel shows. All optional: a fresh corpus has none of them, and
+    #: refusing to build without them would make `calibrate` and `learn`
+    #: prerequisites for seeing anything at all. NaN means "not scored", which
+    #: the writer turns into JSON null — distinct from a score of zero.
+    global_score: np.ndarray | None = None
+    star_rank: np.ndarray | None = None
+    brain_score: np.ndarray | None = None
+
     def __len__(self) -> int:
         return len(self.repo_id)
 
@@ -124,6 +132,27 @@ class BuildResult:
     ordinal_of: dict
     bytes_written: int = 0
     files: list = field(default_factory=list)
+
+
+def _meta_columns(meta: dict, order: np.ndarray, start: int, stop: int) -> dict:
+    """Column-oriented slice of the optional per-repo scores.
+
+    Columns, not a list of objects: at 87k rows the repeated key names cost more
+    than the values do, and nothing here needs to be self-describing per row.
+    Rounded because the panel prints one decimal — writing float64 tails would
+    double the file to encode noise.
+
+    NaN becomes JSON `null`, never 0.0. A repository nobody has scored and one
+    scored at the bottom are different claims, and only one of them is ours.
+    """
+    out: dict = {}
+    for key, values in meta.items():
+        if values is None:
+            continue
+        column = np.asarray(values, dtype=np.float64)[order][start:stop]
+        digits = 0 if key == "starRank" else 1
+        out[key] = [None if np.isnan(v) else round(float(v), digits) for v in column]
+    return out
 
 
 def pack_flags(low_signal: np.ndarray, archived: np.ndarray, fork: np.ndarray) -> np.ndarray:
@@ -211,6 +240,13 @@ def build_world(
     domain = world.domain[order].astype(np.uint8)
     flags = pack_flags(world.low_signal[order], world.is_archived[order], world.is_fork[order])
     names = world.full_name[order]
+    # Sliced per band by `_meta_columns`, which applies `order` itself so the
+    # slice always matches the tile it sits beside.
+    world_meta = {
+        "score": world.global_score,
+        "starRank": world.star_rank,
+        "brain": world.brain_score,
+    }
 
     # ---- tiles ----------------------------------------------------------
     spec = bands or BandSpec()
@@ -243,10 +279,21 @@ def build_world(
             json.dumps([str(x) for x in names[start:stop]], separators=(",", ":"))
         )
 
-        manifest_bands.append(
-            ManifestBand(band=band_index, count=count, bytes=len(blob), file=tile_file, names=names_file)
+        # Sidecar rather than extra bytes per point: the detail panel reads one
+        # repository at a time, so nothing here reaches a shader. Widening the
+        # tile format would cost 87k x N bytes on every load to serve a single
+        # selection, and would mean re-versioning the binary format on both
+        # sides for data the GPU never sees.
+        meta_file = f"meta-{band_index}.json"
+        (out_dir / meta_file).write_text(
+            json.dumps(_meta_columns(world_meta, order, start, stop), separators=(",", ":"))
         )
-        files += [out_dir / tile_file, out_dir / names_file]
+
+        manifest_bands.append(
+            ManifestBand(band=band_index, count=count, bytes=len(blob), file=tile_file,
+                         names=names_file, meta=meta_file)
+        )
+        files += [out_dir / tile_file, out_dir / names_file, out_dir / meta_file]
         total_bytes += len(blob)
         log.info("band %d: %d points, %.1f MB", band_index, count, len(blob) / 1e6)
         start = stop

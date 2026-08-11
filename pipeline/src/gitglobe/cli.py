@@ -411,6 +411,159 @@ async def _cmd_rank(args: argparse.Namespace) -> int:
     return await _with_db(run)
 
 
+async def _cmd_calibrate(args: argparse.Namespace) -> int:
+    from .phase2 import stage_calibrate
+
+    async def run(db, settings):
+        result = await stage_calibrate(
+            db, tokens=settings.github_tokens, remeasure=args.remeasure
+        )
+        print(f"\nScored {result.rows:,} repositories against all of GitHub.")
+        print(f"  {result.detail['summary']}")
+        print(f"  Star scale #{result.detail['scale_id']} measured {result.detail['measured_at']}")
+
+        # The leaderboard first, because it is the only view that shows whether
+        # the score is sane. The movers table below cannot: it ranks by places
+        # moved, so small packages with many dependents top it by construction
+        # and it reads the same whether the composite works or not.
+        print("\nHighest scoring:")
+        for entry in result.detail["top"]:
+            parts = " ".join(f"{k[:4]} {v:.2f}" for k, v in entry["components"].items())
+            print(f"  {entry['full_name']:<44} {entry['score']:5.1f}   {parts}")
+
+        # The honest check on whether the composite earned its keep. A score
+        # that never disagrees with stars IS stars, and this is where that
+        # shows up rather than being discovered by a user.
+        movers = result.detail["movers"]
+        if movers:
+            print("\nBiggest disagreements with a pure star ranking:")
+            for m in movers:
+                arrow = "up" if m["places"] > 0 else "down"
+                print(f"  {m['full_name']:<44} {arrow:>4} {abs(m['places']):>7,} places"
+                      f"   score {m['score']:5.1f}")
+        print("\nNext: gitglobe build")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_teach(args: argparse.Namespace) -> int:
+    from .phase2 import stage_teach
+
+    async def run(db, settings):
+        result = await stage_teach(
+            db, total=args.total, provider=args.provider,
+            project=getattr(settings, "gcp_project", "") or "",
+            model=args.model, seed=args.seed, concurrency=args.concurrency,
+            dry_run=args.dry_run,
+        )
+        detail = result.detail
+        if "note" in detail:
+            print(detail["note"])
+            return 1
+
+        print(f"\n{detail['sample']}")
+        print(f"  {detail['already']:,} already rated · {detail.get('todo', 0):,} to rate")
+        if detail.get("dry_run"):
+            cost = detail["estimate"]
+            price = f"~${cost['est_usd']}" if cost["billed"] else "free tier"
+            hours = cost["est_minutes"] / 60
+            when = (f"~{cost['est_minutes']:.0f} min" if hours < 1.5
+                    else f"~{hours:.1f} hours")
+            print(f"\nEstimate: {price} · {when} · "
+                  f"{cost['est_input_tokens']:,} in / {cost['est_output_tokens']:,} out tokens")
+            # The floor, not a promise. A slow reasoning model can be the
+            # binding constraint rather than the limiter, in which case it runs
+            # longer — so say what the number assumes rather than let a run
+            # that overshoots look broken.
+            if cost["rate_limit_rpm"]:
+                print(f"  Assumes the full {cost['rate_limit_rpm']:.0f} req/min; "
+                      f"a slow model is slower still. Ctrl-C is safe — it "
+                      f"checkpoints every 200 rows and resumes.")
+            print("\nRe-run without --dry-run to spend it.")
+            return 0
+
+        print(f"  {detail['summary']}")
+        # Failures are printed, never swallowed. A run that rated 3,000 of 4,000
+        # and said nothing would look like success and quietly halve the labels.
+        if detail["failures"]:
+            print("\nFailures by reason:")
+            for reason, count in sorted(detail["failures"].items(), key=lambda kv: -kv[1]):
+                print(f"  {reason:<28} {count:>6,}")
+        if detail["flags"]:
+            print("\nTeacher flags:")
+            for flag, count in sorted(detail["flags"].items(), key=lambda kv: -kv[1])[:10]:
+                print(f"  {flag:<28} {count:>6,}")
+        print("\nNext: gitglobe learn   (train the student on these labels)")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_learn(args: argparse.Namespace) -> int:
+    from .phase2 import stage_learn
+
+    async def run(db, _settings):
+        result = await stage_learn(db, seed=args.seed, min_labels=args.min_labels)
+        detail = result.detail
+        if "note" in detail and not detail.get("metrics"):
+            print(detail["note"])
+            return 1
+
+        # Per-dimension held-out quality, printed whether it passed or not. A
+        # distilled model that quietly stored predictions it could not justify
+        # would be worse than no model: 87k confident, identical numbers.
+        print(f"\n{detail.get('labels', 0):,} labelled rows · "
+              f"{detail.get('features', 0)} features\n")
+        print(f"  {'dimension':<22} {'RMSE':>7} {'base':>7} {'R2':>7}  verdict")
+        for key, m in sorted(detail["metrics"].items()):
+            verdict = "keeps" if m["beats_baseline"] else "NO BETTER THAN THE MEAN"
+            print(f"  {key:<22} {m['rmse']:7.2f} {m['baseline_rmse']:7.2f} "
+                  f"{m['r2']:7.3f}  {verdict}")
+
+        if "note" in detail:
+            print(f"\n{detail['note']}")
+            return 1
+
+        if detail["dropped"]:
+            print(f"\nDropped (not stored): {', '.join(detail['dropped'])}")
+        c = detail["composite"]
+        print(f"\nStored {result.rows:,} student scores across "
+              f"{len(detail['kept'])} dimensions.")
+        print(f"  composite: best {c['best']:.1f} · median {c['median']:.1f} · "
+              f"worst {c['worst']:.1f}")
+        print("\nNext: gitglobe build")
+        return 0
+
+    return await _with_db(run)
+
+
+async def _cmd_backfill_criticality(args: argparse.Namespace) -> int:
+    from .rank.criticality import (
+        DUMP_MEASURED_AT, DUMP_URL, fetch_criticality, match_corpus,
+    )
+
+    async def run(db, _settings):
+        scores = await fetch_criticality(args.url)
+        case_map = await db.repo_name_case_map()
+        matched = match_corpus(scores, case_map)
+        if not matched:
+            print("No corpus repository appears in the dump. Nothing written.")
+            print("That is a join failure, not an empty dump — check name casing.")
+            return 1
+        written = await db.update_criticality(matched)
+        coverage = written / max(len(case_map), 1)
+        print(f"\nWrote criticality for {written:,} repositories ({coverage:.1%} of corpus).")
+        print(f"  Source measured {DUMP_MEASURED_AT} — {DUMP_URL}")
+        # Stated every run on purpose. A stale score presented without its date
+        # is the failure the star scale was built to avoid.
+        print("  This dump is not live data; re-check for a newer prefix periodically.")
+        print("\nNext: gitglobe calibrate")
+        return 0
+
+    return await _with_db(run)
+
+
 async def _cmd_build(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -513,6 +666,10 @@ async def _cmd_status(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Safe to import eagerly: criticality.py defers httpx to call time, so this
+    # costs nothing at startup and keeps the dump URL in one place.
+    from .rank.criticality import DUMP_URL as _CRITICALITY_DUMP_URL
+
     parser = argparse.ArgumentParser(prog="gitglobe", description="GitGlobe pipeline")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -611,6 +768,54 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("rank", help="PageRank over depends_on and used_with")
     p.set_defaults(func=_cmd_rank, is_async=True)
+
+    p = sub.add_parser(
+        "calibrate", help="Rank against all ~420M public GitHub repos, not just the corpus"
+    )
+    p.add_argument(
+        "--remeasure", action="store_true",
+        help="Re-measure the global star distribution from the GitHub search API "
+             "(~10 requests). Without this the most recent stored scale is reused, "
+             "which keeps scores comparable between runs.",
+    )
+    p.set_defaults(func=_cmd_calibrate, is_async=True)
+
+    p = sub.add_parser(
+        "teach", help="Have an LLM rate a stratified sample — the student's training labels"
+    )
+    p.add_argument("--total", type=int, default=4_000,
+                   help="Sample size. Cost scales with this; --dry-run first.")
+    p.add_argument("--provider", choices=("nim", "vertex"), default="nim",
+                   help="nim needs NVIDIA_API_KEY (free tier); vertex needs GCP_PROJECT")
+    p.add_argument("--model", default="", help="Override the provider's default model")
+    p.add_argument("--seed", type=int, default=42,
+                   help="Sampling seed. Keep it fixed, or a resumed run rates a "
+                        "different sample from the one it started.")
+    p.add_argument("--concurrency", type=int, default=0,
+                   help="In-flight requests. 0 picks the provider default (60 for "
+                        "nim). Lower it if 503s outpace the retry budget.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Print the sample and the cost estimate; call nothing.")
+    p.set_defaults(func=_cmd_teach, is_async=True)
+
+    p = sub.add_parser(
+        "learn", help="Train the student on the teacher's labels and score every repo"
+    )
+    p.add_argument("--seed", type=int, default=11)
+    p.add_argument("--min-labels", type=int, default=200,
+                   help="Refuse to train on fewer than this many teacher labels")
+    p.set_defaults(func=_cmd_learn, is_async=True)
+
+    p = sub.add_parser(
+        "backfill-criticality",
+        help="Fill the criticality column from the OpenSSF bulk dump (~119 MB, no auth)",
+    )
+    p.add_argument(
+        "--url", default=_CRITICALITY_DUMP_URL,
+        help="Override the dump to read. Check for a newer dated prefix at "
+             "https://storage.googleapis.com/storage/v1/b/ossf-criticality-score/o?delimiter=/",
+    )
+    p.set_defaults(func=_cmd_backfill_criticality, is_async=True)
 
     p = sub.add_parser("build", help="Write tiles, graph and manifest for the web app")
     p.add_argument("--out", default="../web/public/tiles")

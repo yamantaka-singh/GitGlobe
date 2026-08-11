@@ -2,10 +2,13 @@
 
 ![Status](https://img.shields.io/badge/Status-Shipped-success?style=for-the-badge)
 ![Tech](https://img.shields.io/badge/WebGL-Three.js-black?style=for-the-badge&logo=three.js)
-![Tech](https://img.shields.io/badge/Agent-Claude_3.5_Sonnet-coral?style=for-the-badge&logo=anthropic)
-![Data](https://img.shields.io/badge/Nodes-1_Million-blue?style=for-the-badge)
+![Tech](https://img.shields.io/badge/Agent-Claude_Sonnet_4.5-coral?style=for-the-badge&logo=anthropic)
+![Data](https://img.shields.io/badge/Nodes-87%2C227-blue?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-446_across_19_suites-green?style=for-the-badge)
 
-**A 3D interactive globe of the open-source universe.** One million repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, zooming, and talking to an AI that flies the camera for you.
+**A 3D interactive globe of the open-source universe.** 87,227 repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, zooming, and talking to an AI that flies the camera for you.
+
+Every repository carries a **measured global rank** — its position among all ~420M public repositories, from an empirically sampled star distribution rather than an assumed power law — and a **quality score** distilled from an LLM into a gradient-boosted regressor that is never shown a star count.
 
 > "Show me lightweight C++ web servers with minimal dependencies" → the globe spins, zooms into the systems-programming continent, and lights up a cluster of eleven repositories you'd never have found through search.
 
@@ -78,7 +81,11 @@ Four ideas do the heavy lifting:
 
 **3. The LLM never invents coordinates.** An agent that outputs `fly_to(lat: 42.1, lon: -80.3)` will hallucinate. GitGlobe's agent outputs *repository IDs*; the client looks up their real positions and computes the camera target. The model reasons about software; the renderer owns geometry. See [ADR-006](docs/ARCHITECTURE.md#adr-006-agent-camera-control-protocol).
 
-**4. Edges are demand-loaded.** A million nodes implies tens of millions of dependency edges. Drawing them is neither possible nor useful — it's a hairball. Arcs appear only for the focused node's neighborhood, capped at ~2,000.
+**4. Edges are demand-loaded.** 87k nodes carry 234,640 CSR entries, and drawing them all is neither possible nor useful — it's a hairball. Arcs appear only for the focused node's neighborhood, capped at ~2,000.
+
+**5. The ranking model is blindfolded to popularity.** An LLM teacher rates a stratified sample of repositories against a six-dimension rubric; a gradient-boosted regressor written from scratch in NumPy distils those judgements to the whole corpus. Star and fork counts are stripped from both the teacher's prompt and the student's features, enforced by tests — without that, the model just relearns stars under a new name. A dimension is only stored if its held-out RMSE beats predicting the mean by more than sampling noise.
+
+**6. Rank is measured, not modelled.** GitHub's search API reports exact counts, so walking a 29-rung star ladder yields the empirical survival function over ~322M repositories. A repository's rank is its position among *all* public repositories, not among the ones this corpus happens to hold — which would flatter every result by two orders of magnitude.
 
 ---
 

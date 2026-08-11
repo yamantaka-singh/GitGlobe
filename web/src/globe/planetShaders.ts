@@ -223,23 +223,11 @@ ${NOISE}
     // ---- emission colour ---------------------------------------------------
     // A subtle, non-uniform dimmed navy blue background using the cloud noise.
     vec3 navy = vec3(0.02, 0.03, 0.12);
-    vec3 gas = navy * (cloud * 0.8 + density * 0.5) * (1.0 - dust * 0.8);
+    // Removed dust occlusion completely so random procedural noise doesn't dim specific domains (like Mobile)
+    vec3 gas = navy * (cloud * 0.8 + density * 0.5);
 
     // ---- Celestialsapien / Alien X Stars -----------------------------------
-    // Generate multiple layers of stars to give infinite depth
-    float star1 = fract(sin(dot(dir, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
-    float star2 = fract(sin(dot(dir, vec3(45.164, 12.9898, 78.233))) * 23758.5453);
-    float star3 = fract(sin(dot(dir, vec3(78.233, 45.164, 12.9898))) * 63758.5453);
-    
-    // Thresholds for different sizes/brightnesses
-    float s1 = smoothstep(0.995, 1.0, star1) * 2.0;
-    float s2 = smoothstep(0.998, 1.0, star2) * 1.5;
-    float s3 = smoothstep(0.9995, 1.0, star3) * 3.0; // very rare, very bright
-    
-    float stars = s1 + s2 + s3;
-    
-    // Add stars heavily, keeping them white/cyan-tinted
-    gas += vec3(stars * 0.95, stars * 0.98, stars * 1.0);
+    // (Removed artificial surface stars so they don't look like repos)
 
     // ---- emission ----------------------------------------------------------
     // No aurora or city light glow (which is tinted blue). Just output the stars directly into the albedo.

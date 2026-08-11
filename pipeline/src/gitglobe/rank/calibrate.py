@@ -26,6 +26,7 @@ from .global_scale import (
     Weights,
     dependents_percentile,
     monotonic_repair,
+    star_magnitude,
 )
 
 log = logging.getLogger(__name__)
@@ -68,7 +69,10 @@ async def measure_star_scale(
                 continue
             thresholds.append(threshold)
             counts.append(count)
-            log.info("stars >= %-7d %15,d repositories", threshold, count)
+            # `,` is a str.format/f-string grouping option, NOT a printf flag.
+            # "%15,d" raises inside logging, which swallows it as a handler
+            # error and prints a traceback per rung instead of the measurement.
+            log.info("stars >= %-7d %15s repositories", threshold, f"{count:,}")
 
     # Counts must fall as the threshold rises. Where they do not, a request was
     # truncated — drop it rather than smoothing a failed measurement into the
@@ -167,13 +171,20 @@ def composite_score(
     if total_weight <= 0:
         raise ValueError("weights sum to zero")
 
-    star_pct = scale.percentile(signals.stars)
+    # Absolute magnitude, NOT scale.percentile. Every repository in this corpus
+    # sits above GitHub's 99.8th percentile, so the percentile spread across the
+    # whole corpus was 0.0016 — it added a flat ~25 points and ordered nothing.
+    # The scale still supplies `star_rank` below, which is the honest measured
+    # number to show a user; it is just not a usable ranking signal in here.
+    star_pct = star_magnitude(signals.stars)
     dep_pct = dependents_percentile(signals.dependents)
     # A ratio of 1.0 is exactly average; 100x average maps near the top. log
     # because PageRank, like everything else here, is power-law distributed.
     rank_pct = min(1.0, max(0.0, math.log10(max(signals.pagerank_ratio, 0.01) + 0.1) / 3.0 + 0.34))
     crit = min(1.0, max(0.0, signals.criticality))
-    vel_pct = scale.percentile(signals.stars_90d * 4) if signals.stars_90d else 0.0
+    # Same ruler as stars, for the same reason: a percentile of an annualised
+    # star rate saturates just as hard. x4 turns 90 days into a yearly rate.
+    vel_pct = star_magnitude(signals.stars_90d * 4) if signals.stars_90d else 0.0
 
     components = {
         "stars": star_pct,
@@ -192,7 +203,13 @@ def composite_score(
 
     return GlobalRank(
         score=round(blended * 100, 2),
+        # Both of these are the MEASURED scale, not the ruler used above. They
+        # are what a user is shown — "#4,312 of ~420M" — and that claim has an
+        # empirical survival function behind it. Setting star_percentile from
+        # `star_pct` instead, as an earlier version of this did, replaced a
+        # measurement with a presentation choice and reported 0.376 for a
+        # repository genuinely in the top 0.01%.
         star_rank=scale.rank_of(signals.stars),
-        star_percentile=round(star_pct, 6),
+        star_percentile=round(scale.percentile(signals.stars), 6),
         components={k: round(v, 4) for k, v in components.items()},
     )

@@ -347,5 +347,51 @@ class TestEdgeKindPacking(unittest.TestCase):
             self.assertEqual((int(entry) & KIND_MASK) >> KIND_SHIFT, 2)
 
 
+class TestManifestSerialisation(unittest.TestCase):
+    """Every ManifestBand field must survive `to_dict`.
+
+    `Manifest.to_dict` hand-lists its keys, so adding a field to the dataclass
+    is not enough — and forgetting the second edit fails silently. That is
+    exactly what happened with `meta`: the sidecar files were written, the
+    manifest omitted them, the loader saw `entry.meta === undefined` and never
+    fetched, and the panel showed "not ranked" for every repository. No error
+    anywhere. This compares the dataclass against the serialiser so the next
+    field cannot be dropped the same way.
+    """
+
+    def band(self, **kwargs):
+        from gitglobe.tiles.format import ManifestBand
+        return ManifestBand(band=0, count=1, bytes=8, file="band-0.bin", **kwargs)
+
+    def serialise(self, band) -> dict:
+        from gitglobe.tiles.format import Manifest
+        return Manifest(layout_version=2, total=1, bands=[band]).to_dict()["bands"][0]
+
+    def test_every_dataclass_field_reaches_the_json(self) -> None:
+        import dataclasses
+
+        # Populate every optional field so none can be skipped as falsy.
+        filled = self.band(names="names-0.json", meta="meta-0.json")
+        emitted = set(self.serialise(filled))
+        declared = {f.name for f in dataclasses.fields(filled)}
+        self.assertEqual(
+            declared - emitted, set(),
+            "field(s) on ManifestBand never reach to_dict — the loader will see "
+            "undefined and silently skip them",
+        )
+
+    def test_optional_fields_are_omitted_when_unset(self) -> None:
+        # A world built before calibrate/learn has no sidecar; emitting
+        # "meta": null would make the loader fetch a file that does not exist.
+        emitted = self.serialise(self.band())
+        self.assertNotIn("meta", emitted)
+        self.assertNotIn("names", emitted)
+
+    def test_meta_round_trips(self) -> None:
+        self.assertEqual(
+            self.serialise(self.band(meta="meta-2.json"))["meta"], "meta-2.json"
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

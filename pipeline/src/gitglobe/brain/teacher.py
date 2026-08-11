@@ -44,6 +44,11 @@ NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 
 DEFAULT_CONCURRENCY = 16
+
+#: Workers for NIM. Sized as rate x latency: 40 requests/minute against ~90s
+#: per call needs ~60 in flight to keep the limiter, rather than idle workers,
+#: as the binding constraint. Measured from a real run that managed 5/min on 8.
+NIM_CONCURRENCY = 60
 CHECKPOINT_EVERY = 200
 
 
@@ -111,9 +116,19 @@ class TeacherConfig:
         if self.provider == "nim":
             if not self.requests_per_minute:
                 self.requests_per_minute = 40.0
-            # A 550B reasoning model is slow per call, and at 40 RPM the limiter
-            # sets throughput anyway — more workers would only pile up waiting.
-            self.concurrency = min(self.concurrency, 8)
+            # This used to clamp to 8, reasoning that at 40 RPM the limiter set
+            # throughput anyway and extra workers would just wait. Measured, that
+            # is backwards: a 550B reasoning call takes ~90s, so 8 workers give
+            # ~5 requests a minute — an eighth of the limit, with the limiter
+            # never once binding. Concurrency was the constraint the whole time.
+            #
+            # Workers needed to saturate a rate limit is rate x latency:
+            # 40/min x 90s = 60. The limiter still enforces the ceiling, so
+            # over-provisioning here cannot exceed the quota; it only stops
+            # workers idling. Lower it if NIM starts returning 503s faster than
+            # the retry budget absorbs them.
+            if self.concurrency == DEFAULT_CONCURRENCY:
+                self.concurrency = NIM_CONCURRENCY
 
     @property
     def endpoint(self) -> str:
@@ -152,21 +167,43 @@ class TeacherStats:
         )
 
 
-def estimate(n_rows: int, mean_readme_chars: float) -> dict:
-    """Cost before spending it. Print this and look at it."""
-    # Prompt is the README plus the rubric, which is ~900 tokens of fixed text.
+def estimate(n_rows: int, mean_readme_chars: float, config=None) -> dict:
+    """Cost and duration before spending them. Print this and look at it.
+
+    Both numbers used to ignore the provider and both were wrong for NIM.
+
+    **Duration.** The old formula was `n / (DEFAULT_CONCURRENCY * 1.5) / 60`,
+    which asserts 24 rows a second and ignores the rate limiter entirely. It
+    quoted 2.8 minutes for a 4,000-row run that actually takes hours, and a
+    number that far off invites killing a healthy run for looking hung. Pace is
+    set by `requests_per_minute`, so that is what this divides by now — still
+    a floor rather than a promise, because a large reasoning model can be slower
+    than the limiter and then latency binds instead.
+
+    **Cost.** The rates below are Vertex Flash. NIM's free tier bills nothing,
+    and quoting $3.19 for it is not a harmless overestimate — it is a reason not
+    to run something that is free.
+    """
     input_tokens = n_rows * (mean_readme_chars / 3.5 + 900)
     output_tokens = n_rows * 120
+    provider = getattr(config, "provider", "vertex")
+    billed = provider != "nim"
     usd = (
         input_tokens / 1e6 * USD_IN_PER_MILLION
         + output_tokens / 1e6 * USD_OUT_PER_MILLION
-    )
+    ) if billed else 0.0
+
+    rpm = getattr(config, "requests_per_minute", 0.0) or 0.0
+    concurrency = getattr(config, "concurrency", DEFAULT_CONCURRENCY)
+    minutes = n_rows / rpm if rpm > 0 else n_rows / max(concurrency, 1) / 60
     return {
         "rows": n_rows,
         "est_input_tokens": int(input_tokens),
         "est_output_tokens": int(output_tokens),
         "est_usd": round(usd, 2),
-        "est_minutes": round(n_rows / (DEFAULT_CONCURRENCY * 1.5) / 60, 1),
+        "billed": billed,
+        "est_minutes": round(minutes, 1),
+        "rate_limit_rpm": rpm,
     }
 
 

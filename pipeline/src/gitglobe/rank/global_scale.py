@@ -204,6 +204,41 @@ class Weights:
         return self.stars + self.dependents + self.pagerank + self.criticality + self.velocity
 
 
+#: Reference ceiling for the star ruler. A FIXED constant, deliberately not the
+#: corpus maximum: normalising by "the biggest thing we happen to hold" makes
+#: every repository's size depend on which other repositories were ingested, so
+#: resuming ingest would resize the whole globe without anything about the world
+#: having changed. That is the same defect `pagerank_ratio` exists to avoid.
+#: Roughly the largest public repository on GitHub; only needs revisiting if
+#: something exceeds it, and being slightly low merely saturates the very top.
+STAR_REFERENCE_MAX = 500_000
+
+#: Fourth root. Chosen by measuring five candidates against the real corpus:
+#: a percentile flattens everything above ~5k stars into one band, plain log
+#: compresses the titans together, and the cube root separates the top slightly
+#: better but crushes the bottom into four of ten bands. The fourth root is the
+#: balance point, and unlike a piecewise curve it has no knee — a knee is a
+#: judgement about where "important" begins, which would have to be re-tuned as
+#: the corpus changes and would smuggle the coupling back in.
+STAR_ROOT = 4.0
+
+
+def star_magnitude(stars: float, *, reference: float = STAR_REFERENCE_MAX) -> float:
+    """Absolute 0-1 visual magnitude from a raw star count.
+
+    Depends only on the repository's own star count and a fixed reference, so a
+    50,000-star project scores identically whether the corpus holds ten rows or
+    ten million. `StarScale.percentile` remains the right tool for *displaying*
+    a global rank — it is a measurement and it is honest — but it is the wrong
+    tool for the composite, because within this corpus it is nearly constant:
+    every repository here is already above GitHub's 99.8th percentile, so it
+    contributed a flat offset and ordered nothing.
+    """
+    assert reference > 0, "star reference must be positive"
+    value = max(0.0, float(stars))
+    return min(1.0, (value ** (1.0 / STAR_ROOT)) / (reference ** (1.0 / STAR_ROOT)))
+
+
 def dependents_percentile(count: float) -> float:
     """Absolute scale for "how many things depend on this".
 

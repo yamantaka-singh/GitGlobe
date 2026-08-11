@@ -1,11 +1,13 @@
 import { useGlobeStore } from '../store/useGlobeStore';
 import { sceneIndex } from '../globe/Scene';
 import { repoIdentity, findGlobalIdByName } from '../repo/names';
+import { describeRank, scoresFor } from '../repo/scores';
 import { DOMAIN_PALETTE } from '../globe/shaders';
-import { degreeOf, rankPercentile, neighboursOf, EDGE_SIMILAR_TO } from '../graph/format';
+import { degreeOf, neighboursOf, EDGE_SIMILAR_TO } from '../graph/format';
 import { globeCamera } from '../camera/Rig';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
+import { group } from './num';
 
 function rgb(i: number) {
   const c = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length];
@@ -80,10 +82,12 @@ export function RepoDetailPanel() {
   const domains = sceneIndex.manifest?.domains ?? [];
   const graph = sceneIndex.graph;
   const degree = graph ? degreeOf(graph, selectedId) : { in: 0, out: 0 };
-  const rank = graph ? graph.rank[selectedId] : 0;
-  const percentile = graph && sceneIndex.sortedRanks
-    ? rankPercentile(sceneIndex.sortedRanks, rank)
-    : 0;
+  // Global standing, measured against GitHub's real star distribution rather
+  // than against the 87k repositories we happen to hold. The old line here was
+  // an in-corpus PageRank percentile labelled only "Top X%" — but every repo in
+  // this corpus already clears ~66 stars, which is the top 0.2% of GitHub, so
+  // that number understated standing by roughly 500x while reading as global.
+  const scores = scoresFor(selectedId);
 
   const domainIndex = data?.domain != null ? data.domain : domain;
   const colour = rgb(domainIndex);
@@ -92,7 +96,7 @@ export function RepoDetailPanel() {
 
   // Display values — real when loaded, placeholder text while fetching
   const description = isLoading ? 'Loading…' : (data?.description || '—');
-  const stars = isLoading ? '…' : (data?.stars?.toLocaleString() ?? '0');
+  const stars = isLoading ? '…' : (data?.stars !== undefined ? group(data.stars) : '0');
   const language = isLoading ? '…' : (data?.language || 'Unknown');
 
   const dependentsList = graphData?.edges
@@ -162,10 +166,26 @@ export function RepoDetailPanel() {
       <dl className="detail-panel__stats">
         <dt>Domain</dt>
         <dd style={{ color: '#FFFFFF' }}>{domainName}</dd>
-        <dt>Rank</dt>
-        <dd style={{ color: '#FFFFFF' }}>
-          Top {((1 - percentile) * 100).toFixed(percentile > 0.99 ? 2 : 1)}%
-        </dd>
+        <dt>Global rank</dt>
+        <dd style={{ color: '#FFFFFF' }}>{describeRank(scores.starRank)}</dd>
+        {scores.score !== undefined && (
+          <>
+            <dt>Score</dt>
+            <dd style={{ color: '#FFFFFF' }}>
+              {scores.score.toFixed(1)}
+              <span style={{ opacity: 0.55 }}> / 100</span>
+            </dd>
+          </>
+        )}
+        {scores.brain !== undefined && (
+          <>
+            <dt>Quality</dt>
+            <dd style={{ color: '#FFFFFF' }}>
+              {scores.brain.toFixed(1)}
+              <span style={{ opacity: 0.55 }}> / 100</span>
+            </dd>
+          </>
+        )}
         <dt>Dependents</dt>
         <dd style={{ color: '#FFFFFF' }}>
           <button 
@@ -173,7 +193,7 @@ export function RepoDetailPanel() {
             onClick={() => setShowList(showList === 'dependents' ? null : 'dependents')}
             style={{ textDecoration: 'underline', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
           >
-            {degree.in.toLocaleString()}
+            {group(degree.in)}
           </button>
         </dd>
         <dt>Dependencies</dt>
@@ -183,7 +203,7 @@ export function RepoDetailPanel() {
             onClick={() => setShowList(showList === 'dependencies' ? null : 'dependencies')}
             style={{ textDecoration: 'underline', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
           >
-            {degree.out.toLocaleString()}
+            {group(degree.out)}
           </button>
         </dd>
         <dt>Alternatives</dt>
@@ -193,7 +213,7 @@ export function RepoDetailPanel() {
             onClick={() => setShowList(showList === 'alternatives' ? null : 'alternatives')}
             style={{ textDecoration: 'underline', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
           >
-            {alternativesList.length.toLocaleString()}
+            {group(alternativesList.length)}
           </button>
         </dd>
         <dt>Focus Arcs</dt>
