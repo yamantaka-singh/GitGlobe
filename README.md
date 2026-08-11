@@ -4,6 +4,8 @@
 
 > "Show me lightweight C++ web servers with minimal dependencies" → the globe spins, zooms into the systems-programming continent, and lights up a cluster of eleven repositories you'd never have found through search.
 
+![GitGlobe Demo](./design-system/gitglobe/assets/hero-placeholder.png)
+
 ---
 
 ## Why this exists
@@ -80,6 +82,17 @@ Four ideas do the heavy lifting:
 | **Tiles** | Cloudflare R2 + CDN | Static binary blobs; zero egress fees. |
 
 Full library-by-library breakdown with versions and rationale: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md#library-reference).
+
+---
+
+## Key Engineering Challenges (Learnings)
+
+This project was built to push the limits of what a browser can render while maintaining a 60fps budget. As a portfolio piece, it tackles several non-trivial engineering problems:
+
+- **Raw WebGL Shader Optimization:** Passing 40,000+ nodes to a single `THREE.Points` draw call required writing custom GLSL vertex and fragment shaders. We encountered and solved cross-platform GPU precision issues (e.g., `highp` mismatches between varying uniforms) and handled mathematical edge cases in `smoothstep` that would otherwise discard pixels on stricter drivers.
+- **Dynamic Spherical Geometry:** Rendering flowing dependencies as 3D Bezier curves wrapped around a sphere. Edges are demand-loaded and directional (dependencies vs. dependents are visually distinct using animated arrowheads and dashing), avoiding the visual clutter of a traditional "hairball" graph.
+- **Vector Space to Spherical Coordinates:** Bypassing the standard 3D UMAP distortion by using `output_metric="haversine"` to natively project 512-dimensional embeddings directly onto the surface of a sphere ($S^2$). 
+- **Agentic Camera Control:** Instead of letting the LLM hallucinate 3D coordinates, the AI agent streams repository IDs. The client resolves these to spatial clusters and smoothly flies the camera to the correct continent using a custom spherical interpolation rig.
 
 ---
 
@@ -169,13 +182,13 @@ Star count is a popularity proxy that heavily favours old repos. Node radius sho
 ## Roadmap
 
 - [x] Concept and spatial pipeline sketch
-- [ ] **Phase 0** — Render 1M synthetic points at 60fps *(de-risks everything else)*
-- [ ] **Phase 1** — Ingest 100k real repos, cleaned and enriched
-- [ ] **Phase 2** — Embed + spherical UMAP + S2 tiling
-- [ ] **Phase 3** — Real data on the globe, hover/click, GPU picking
-- [ ] **Phase 4** — Hybrid search API with reranking
-- [ ] **Phase 5** — Agent camera control, streaming
-- [ ] **Phase 6** — Dependency and semantic arcs
+- [x] **Phase 0** — Render 1M synthetic points at 60fps *(de-risks everything else)*
+- [x] **Phase 1** — Ingest 100k real repos, cleaned and enriched
+- [x] **Phase 2** — Embed + spherical UMAP + S2 tiling
+- [x] **Phase 3** — Real data on the globe, hover/click, GPU picking
+- [x] **Phase 4** — Hybrid search API with reranking
+- [x] **Phase 5** — Agent camera control, streaming
+- [x] **Phase 6** — Dependency and semantic arcs (moving arrowheads, backbone web)
 - [ ] **Phase 7** — Scale to 1M, nebula labels, share-a-view URLs, deploy
 
 Detailed tasks and exit criteria per phase: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
