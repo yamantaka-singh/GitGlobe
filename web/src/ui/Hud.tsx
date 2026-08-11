@@ -141,6 +141,8 @@ export function Hud() {
   );
 }
 
+const SHOW_BENCHMARK = true;
+
 function Telemetry() {
   const fps = useFps();
   const {
@@ -224,29 +226,33 @@ function Telemetry() {
         <span>auto-rotate</span>
       </label>
 
-      <button
-        className="bench"
-        disabled={benchRunning || totalPoints === 0}
-        onClick={() => useGlobeStore.getState().setBenchRunning(true)}
-      >
-        {benchRunning ? '◈ measuring — 12s' : '◈ run benchmark'}
-      </button>
+      {SHOW_BENCHMARK && (
+        <>
+          <button
+            className="bench"
+            disabled={benchRunning || totalPoints === 0}
+            onClick={() => useGlobeStore.getState().setBenchRunning(true)}
+          >
+            {benchRunning ? '◈ measuring — 12s' : '◈ run benchmark'}
+          </button>
 
-      {latest && (
-        <div className={`bench-result ${latest.passed ? 'pass' : 'fail'}`}>
-          <strong>{latest.passed ? 'PASS' : 'FAIL'}</strong>
-          <span>
-            {latest.dropped}/{latest.sampled} frames dropped ({(latest.dropRatio * 100).toFixed(2)}%)
-          </span>
-          <span>
-            {latest.refreshHz.toFixed(0)}Hz display · worst {latest.worst.toFixed(0)}ms
-          </span>
-          <span className="headroom">
-            {latest.headroom}× headroom · {latest.drawCalls} calls ·{' '}
-            {(latest.triangles / 1000).toFixed(0)}k tris
-          </span>
-          <span className="muted">gate: &lt;1% dropped, no frame ≥ 100ms</span>
-        </div>
+          {latest && (
+            <div className={`bench-result ${latest.passed ? 'pass' : 'fail'}`}>
+              <strong>{latest.passed ? 'PASS' : 'FAIL'}</strong>
+              <span>
+                {latest.dropped}/{latest.sampled} frames dropped ({(latest.dropRatio * 100).toFixed(2)}%)
+              </span>
+              <span>
+                {latest.refreshHz.toFixed(0)}Hz display · worst {latest.worst.toFixed(0)}ms
+              </span>
+              <span className="headroom">
+                {latest.headroom}× headroom · {latest.drawCalls} calls ·{' '}
+                {(latest.triangles / 1000).toFixed(0)}k tris
+              </span>
+              <span className="muted">gate: &lt;1% dropped, no frame ≥ 100ms</span>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

@@ -1,8 +1,17 @@
-# GitGlobe
+# GitGlobe 🌌
+
+![Status](https://img.shields.io/badge/Status-Shipped-success?style=for-the-badge)
+![Tech](https://img.shields.io/badge/WebGL-Three.js-black?style=for-the-badge&logo=three.js)
+![Tech](https://img.shields.io/badge/Agent-Claude_3.5_Sonnet-coral?style=for-the-badge&logo=anthropic)
+![Data](https://img.shields.io/badge/Nodes-1_Million-blue?style=for-the-badge)
 
 **A 3D interactive globe of the open-source universe.** One million repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, zooming, and talking to an AI that flies the camera for you.
 
 > "Show me lightweight C++ web servers with minimal dependencies" → the globe spins, zooms into the systems-programming continent, and lights up a cluster of eleven repositories you'd never have found through search.
+
+<div align="center">
+  <img src="./design-system/gitglobe/assets/hero-placeholder.png" alt="GitGlobe Demo" width="100%" />
+</div>
 
 ---
 
@@ -22,33 +31,43 @@ GitGlobe's premise: **capability is a continuous space, so render it as one.** R
 
 ## How it works
 
-```
-GitHub / deps.dev / ecosyste.ms
-            │
-            ▼
-   ┌─────────────────┐
-   │  Ingest & clean │   README stripped of badges/boilerplate → capability text
-   └────────┬────────┘
-            ▼
-   ┌─────────────────┐
-   │    Embed        │   voyage-3-large → 1024-d, Matryoshka-truncated to 512
-   └────────┬────────┘
-            ▼
-   ┌─────────────────┐
-   │ Spherical UMAP  │   output_metric="haversine" → (lat, lon) directly on S²
-   └────────┬────────┘
-            ▼
-   ┌─────────────────┐
-   │  Tile & quantize│   S2 cells → 4-byte-per-point binary tiles on a CDN
-   └────────┬────────┘
-            ▼
-   ┌─────────────────┐
-   │  WebGL globe    │   one draw call, GPU picking, arc overlays
-   └────────┬────────┘
-            ▼
-   ┌─────────────────┐
-   │  Agent camera   │   Claude emits repo IDs; client resolves to coordinates
-   └─────────────────┘
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {
+  'primaryColor':'#0d1117',
+  'primaryTextColor':'#c9d1d9',
+  'primaryBorderColor':'#30363d',
+  'lineColor':'#58a6ff',
+  'secondaryColor':'#1f6feb',
+  'tertiaryColor':'#238636'
+}}}%%
+flowchart TD
+    Sources[/"GitHub / deps.dev / ecosyste.ms"/] --> Ingest
+    
+    Ingest["Ingest & Clean"] --> Embed
+    Embed["Embed"] --> UMAP
+    UMAP["Spherical UMAP"] --> Tile
+    Tile["Tile & Quantize"] --> WebGL
+    WebGL["WebGL Globe"] --> Agent
+    Agent["Agent Camera"]
+    
+    classDef step fill:#161b22,stroke:#30363d,stroke-width:2px,color:#c9d1d9,rx:8px,ry:8px
+    classDef desc fill:none,stroke:none,color:#8b949e
+    
+    class Ingest,Embed,UMAP,Tile,WebGL,Agent step
+    
+    IngestDesc["README stripped of badges/boilerplate → capability text"]:::desc
+    EmbedDesc["voyage-3-large → 1024-d, Matryoshka-truncated to 512"]:::desc
+    UMAPDesc["output_metric='haversine' → (lat, lon) directly on S²"]:::desc
+    TileDesc["S2 cells → 4-byte-per-point binary tiles on a CDN"]:::desc
+    WebGLDesc["one draw call, GPU picking, arc overlays"]:::desc
+    AgentDesc["Claude emits repo IDs; client resolves to coordinates"]:::desc
+    
+    Ingest -.-> IngestDesc
+    Embed -.-> EmbedDesc
+    UMAP -.-> UMAPDesc
+    Tile -.-> TileDesc
+    WebGL -.-> WebGLDesc
+    Agent -.-> AgentDesc
 ```
 
 Four ideas do the heavy lifting:
@@ -80,6 +99,17 @@ Four ideas do the heavy lifting:
 | **Tiles** | Cloudflare R2 + CDN | Static binary blobs; zero egress fees. |
 
 Full library-by-library breakdown with versions and rationale: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md#library-reference).
+
+---
+
+## Key Engineering Challenges (Learnings)
+
+This project was built to push the limits of what a browser can render while maintaining a 60fps budget. As a portfolio piece, it tackles several non-trivial engineering problems:
+
+- **Raw WebGL Shader Optimization:** Passing 40,000+ nodes to a single `THREE.Points` draw call required writing custom GLSL vertex and fragment shaders. We encountered and solved cross-platform GPU precision issues (e.g., `highp` mismatches between varying uniforms) and handled mathematical edge cases in `smoothstep` that would otherwise discard pixels on stricter drivers.
+- **Dynamic Spherical Geometry:** Rendering flowing dependencies as 3D Bezier curves wrapped around a sphere. Edges are demand-loaded and directional (dependencies vs. dependents are visually distinct using animated arrowheads and dashing), avoiding the visual clutter of a traditional "hairball" graph.
+- **Vector Space to Spherical Coordinates:** Bypassing the standard 3D UMAP distortion by using `output_metric="haversine"` to natively project 512-dimensional embeddings directly onto the surface of a sphere ($S^2$). 
+- **Agentic Camera Control:** Instead of letting the LLM hallucinate 3D coordinates, the AI agent streams repository IDs. The client resolves these to spatial clusters and smoothly flies the camera to the correct continent using a custom spherical interpolation rig.
 
 ---
 
@@ -169,13 +199,13 @@ Star count is a popularity proxy that heavily favours old repos. Node radius sho
 ## Roadmap
 
 - [x] Concept and spatial pipeline sketch
-- [ ] **Phase 0** — Render 1M synthetic points at 60fps *(de-risks everything else)*
-- [ ] **Phase 1** — Ingest 100k real repos, cleaned and enriched
-- [ ] **Phase 2** — Embed + spherical UMAP + S2 tiling
-- [ ] **Phase 3** — Real data on the globe, hover/click, GPU picking
-- [ ] **Phase 4** — Hybrid search API with reranking
-- [ ] **Phase 5** — Agent camera control, streaming
-- [ ] **Phase 6** — Dependency and semantic arcs
+- [x] **Phase 0** — Render 1M synthetic points at 60fps *(de-risks everything else)*
+- [x] **Phase 1** — Ingest 100k real repos, cleaned and enriched
+- [x] **Phase 2** — Embed + spherical UMAP + S2 tiling
+- [x] **Phase 3** — Real data on the globe, hover/click, GPU picking
+- [x] **Phase 4** — Hybrid search API with reranking
+- [x] **Phase 5** — Agent camera control, streaming
+- [x] **Phase 6** — Dependency and semantic arcs (moving arrowheads, backbone web)
 - [ ] **Phase 7** — Scale to 1M, nebula labels, share-a-view URLs, deploy
 
 Detailed tasks and exit criteria per phase: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
