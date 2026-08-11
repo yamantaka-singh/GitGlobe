@@ -251,7 +251,8 @@ const PLANET_FRAG = /* glsl */ `
     vec4 surf = texture2D(uSurface, vUv);
     // Until the bake lands, fall back to flat ocean rather than black — a
     // one-frame black sphere reads as a load failure.
-    vec3 albedo = mix(uFallback, surf.rgb, uHasSurface);
+    // Darkened base albedo slightly to reduce overall front-side glare
+    vec3 albedo = mix(uFallback, surf.rgb, uHasSurface) * 0.85;
     float cityLights = surf.a * uHasSurface;
 
     // ---- emission ----------------------------------------------------------
@@ -271,7 +272,8 @@ const PLANET_FRAG = /* glsl */ `
     // hue exactly where the gas is densest, and density is where territories
     // are. A small cyan lift stands in for the OIII line sitting on top.
     float night = 1.0 - day;
-    vec3 emissive = albedo * 1.45 + uCityLight * 0.22;
+    // Reduced emissive punch so the clusters don't glow too aggressively
+    vec3 emissive = albedo * 1.2 + uCityLight * 0.15;
     rgb += emissive * cityLights * (0.62 + 0.38 * night);
 
     // ---- graticule ---------------------------------------------------------
@@ -307,10 +309,9 @@ export function Planet({ radius, surface }: { radius: number; surface: THREE.Tex
           uGraticuleGain: { value: 0.16 },
           // Never fully black: an unlit hemisphere with zero albedo loses its
           // silhouette against space and the globe looks bitten into.
-          // High, not near-zero: emissive gas is visible all the way round.
-          // The residual 0.28 of directional variation is what keeps the sphere
+          // The residual directional variation is what keeps the sphere
           // from flattening into a disc.
-          uNightFloor: { value: 0.72 },
+          uNightFloor: { value: 0.95 },
           // A gas giant's atmosphere is deep, so its terminator is soft. A hard
           // edge is the tell that you are looking at a lit sphere, not a world.
           uTerminator: { value: 0.42 },
@@ -403,7 +404,6 @@ function Shell({
         transparent: true,
         depthWrite: false,
         side: THREE.BackSide,
-        blending: THREE.AdditiveBlending,
       }),
     [color, intensity, power, sunBias],
   );
@@ -433,9 +433,9 @@ type RGBTuple = readonly [number, number, number];
 export function Atmosphere({ radius }: { radius: number }) {
   return (
     <>
-      {/* Alien X Outline - uniform 360 glow, zero sunBias so it's a perfect silhouette cut-out */}
-      <Shell radius={radius * 1.008} color={ATMOSPHERE.edge} intensity={0.9} power={20} sunBias={0.0} renderOrder={3} />
-      <Shell radius={radius * 1.02} color={ATMOSPHERE.rim} intensity={0.5} power={8} sunBias={0.0} renderOrder={4} />
+      {/* Cyan atmospheric glow */}
+      <Shell radius={radius * 1.002} color={ATMOSPHERE.edge} intensity={0.9} power={20} sunBias={0.0} renderOrder={1} />
+      <Shell radius={radius * 1.010} color={ATMOSPHERE.rim} intensity={0.5} power={8} sunBias={0.0} renderOrder={1} />
     </>
   );
 }
