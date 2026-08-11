@@ -9,6 +9,9 @@ import { Hud } from './ui/Hud';
 
 const DEV = import.meta.env.DEV;
 
+// Set to true when performance debugging is needed
+const SHOW_PERF = false;
+
 /**
  * Renderer config is a decision, not a default (web3d-scene-architect Rule 3):
  *
@@ -68,7 +71,7 @@ export function App() {
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
-        {DEV && <PerfOverlay />}
+        {DEV && SHOW_PERF && <PerfOverlay />}
       </Canvas>
       <Hud />
     </div>
