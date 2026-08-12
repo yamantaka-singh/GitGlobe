@@ -83,7 +83,7 @@ export function PointCloud({ band, radius, onReady, onDispose }: Props) {
         uHubGain: { value: 0.8 },
         uDomainFilter: { value: -1 },
         uSunDir: { value: SUN_DIR.clone() },
-        uNightDim: { value: 0.42 },
+        uNightDim: { value: 0.90 },
       },
       vertexShader: POINTS_VERT,
       fragmentShader: POINTS_FRAG,

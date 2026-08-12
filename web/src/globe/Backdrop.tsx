@@ -270,7 +270,7 @@ const PLANET_FRAG = /* glsl */ `
     // Front side (night=0): multiplier is 0.25 (keeps day from glaring)
     // Back side (night=1): multiplier is 1.25 (keeps night bright and punchy)
     vec3 emissive = albedo * 1.45 + uCityLight * 0.25;
-    rgb += emissive * cityLights * (0.25 + 1.0 * night);
+    rgb += emissive * cityLights * (0.85 + 0.6 * night);
 
     // ---- graticule ---------------------------------------------------------
     // Kept very faint now that there is terrain to read. It exists to say

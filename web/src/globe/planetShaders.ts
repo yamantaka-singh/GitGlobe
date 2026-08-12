@@ -123,6 +123,7 @@ ${NOISE}
 
   // xyz = unit direction of a cluster centre, w = its domain index.
   uniform vec4  uClusters[${MAX_CLUSTERS}];
+  uniform float uClusterWeights[${MAX_CLUSTERS}];
   uniform vec3  uDomainTint[12];
   uniform float uSeed;
 
@@ -178,7 +179,14 @@ ${NOISE}
       // far side of the planet and would tint every remote region with domain 0.
       float valid = step(0.5, length(mu));
       float d = dot(dir, mu) * valid + (valid - 1.0) * 3.0;
-      potential += exp(-30.0 * (1.0 - d)) * valid;
+
+      // Dynamic decay based on cluster weight (repo count/density):
+      // Larger repo counts -> smaller decay (e.g. 10.0) -> wider territory on the globe!
+      // Smaller repo counts -> larger decay (e.g. 45.0) -> smaller tight territory.
+      float weight = uClusterWeights[i];
+      float decay = mix(45.0, 10.0, clamp(weight, 0.0, 1.0));
+      potential += (0.4 + 0.8 * weight) * exp(-decay * (1.0 - d)) * valid;
+
       if (d > nearest) { nearest = d; domain = uClusters[i].w; }
     }
 
