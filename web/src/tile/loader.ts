@@ -28,7 +28,7 @@ export interface TileManifest {
   domains: string[];
   /** Absent on pre-v2 worlds generated before the graph existed. */
   graph?: GraphManifest;
-  clusters: Array<{ id: number; label: string; domain: number; theta: number; phi: number; kappa: number }>;
+  clusters: Array<{ id: number; label: string; domain: number; theta: number; phi: number; kappa: number; size?: number }>;
 }
 
 export interface LoadedBand {

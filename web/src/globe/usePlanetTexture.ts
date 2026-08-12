@@ -55,14 +55,27 @@ export function usePlanetTexture(manifest: TileManifest | null, tier: keyof type
     // Cluster centres become continental anchors. Padding entries are the zero
     // vector, which contributes nothing — the shader multiplies by length(mu).
     const clusters = new Array(MAX_CLUSTERS).fill(null).map(() => new THREE.Vector4(0, 0, 0, 0));
-    manifest.clusters.slice(0, MAX_CLUSTERS).forEach((c, i) => {
+    const clusterWeights = new Float32Array(MAX_CLUSTERS);
+
+    const slice = manifest.clusters.slice(0, MAX_CLUSTERS);
+    let maxClusterSize = 1;
+    for (const c of slice) {
+      if (c.size && c.size > maxClusterSize) maxClusterSize = c.size;
+    }
+
+    slice.forEach((c, i) => {
       const st = Math.sin(c.theta);
       clusters[i].set(st * Math.cos(c.phi), Math.cos(c.theta), st * Math.sin(c.phi), c.domain);
+      
+      const size = c.size || 1;
+      const normWeight = Math.min(1.0, Math.max(0.1, Math.log2(1 + size) / Math.log2(1 + maxClusterSize)));
+      clusterWeights[i] = normWeight;
     });
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uClusters: { value: clusters },
+        uClusterWeights: { value: clusterWeights },
         uDomainTint: { value: DOMAIN_TERRAIN_TINT.map((c) => new THREE.Color(...c)) },
         // Derived from the world seed, so the same world always grows the same
         // weather. A planet that reshuffles on reload has no sense of place.
