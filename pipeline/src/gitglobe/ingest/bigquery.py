@@ -35,9 +35,9 @@ SELECT
   repo.name              AS full_name,
   COUNT(*)               AS stars_90d
 FROM `githubarchive.month.{suffix_pattern}`
+JOIN `{names_table}` ours ON LOWER(repo.name) = ours.full_name
 WHERE _TABLE_SUFFIX BETWEEN '{start_month}' AND '{end_month}'
   AND type = 'WatchEvent'
-  AND repo.name IN UNNEST(@repo_names)
 GROUP BY full_name
 """
 
@@ -49,6 +49,15 @@ GROUP BY full_name
 #   - actors with more than `max_stars` are dropped. Someone who starred 5,000
 #     repositories is browsing, not choosing, and would contribute 12.5M pairs.
 #   - only repositories we actually hold are counted, so the join stays small.
+#
+# **The corpus is a JOIN against an uploaded table, never `IN UNNEST(@array)`.**
+# An array parameter is fine for hundreds of values and pathological for a
+# hundred thousand: BigQuery cannot turn it into a hash join, so it becomes a
+# membership test per row against a 139k-element array, evaluated across every
+# WatchEvent in the range. The symptom is distinctive and misleading — the
+# dry-run scan estimate stays small (71 GB, because bytes read are unchanged)
+# while the query runs for hours, so the cost guard sees nothing wrong. Measured
+# at 87k repositories it was slow; at 138,870 it stopped completing at all.
 CO_STAR_SQL = """
 WITH events AS (
   SELECT
@@ -56,9 +65,9 @@ WITH events AS (
     repo.name   AS full_name,
     DATE(created_at) AS starred_at
   FROM `githubarchive.month.*`
+  JOIN `{names_table}` ours ON LOWER(repo.name) = ours.full_name
   WHERE _TABLE_SUFFIX BETWEEN '{start_month}' AND '{end_month}'
     AND type = 'WatchEvent'
-    AND repo.name IN UNNEST(@repo_names)
 ),
 deduped AS (
   SELECT actor, full_name, MIN(starred_at) AS starred_at
@@ -326,15 +335,15 @@ class BigQueryExtractor:
         if not full_names or not months:
             return {}
 
+        # Table, not an array parameter — same reason as CO_STAR_SQL. This one
+        # had not bitten yet only because velocity has never been backfilled.
         sql = STAR_VELOCITY_SQL.format(
             suffix_pattern="*",
+            names_table=self._upload_names(full_names),
             start_month=min(months),
             end_month=max(months),
         )
-        params = [
-            self._bq.ArrayQueryParameter("repo_names", "STRING", full_names),
-        ]
-        return {row["full_name"]: row["stars_90d"] for row in self._run(sql, params)}
+        return {row["full_name"]: row["stars_90d"] for row in self._run(sql, [])}
 
     def co_star_events(
         self,
@@ -349,12 +358,19 @@ class BigQueryExtractor:
         Returns raw `(actor, full_name, starred_at)` rather than pre-aggregated
         pairs on purpose. Pair generation and PPMI are cheap and get retuned
         often; the BigQuery scan is the expensive half and should happen once.
+
+        The corpus goes up as a table, the same way `dependency_repo_edges_from_map`
+        already does it — see the note on CO_STAR_SQL for why an array parameter
+        is not an option at this size.
         """
         if not full_names or not months:
             return []
-        sql = CO_STAR_SQL.format(start_month=min(months), end_month=max(months))
+        sql = CO_STAR_SQL.format(
+            names_table=self._upload_names(full_names),
+            start_month=min(months),
+            end_month=max(months),
+        )
         params = [
-            self._bq.ArrayQueryParameter("repo_names", "STRING", full_names),
             self._bq.ScalarQueryParameter("min_stars", "INT64", min_stars),
             self._bq.ScalarQueryParameter("max_stars", "INT64", max_stars),
         ]
