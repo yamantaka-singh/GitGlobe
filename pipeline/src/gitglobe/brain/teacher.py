@@ -83,7 +83,7 @@ USD_IN_PER_MILLION = 0.30
 USD_OUT_PER_MILLION = 2.50
 
 #: Enough for six integers, a sentence, and a short flag list.
-MAX_OUTPUT_TOKENS = 400
+MAX_OUTPUT_TOKENS = 2048
 
 
 @dataclass

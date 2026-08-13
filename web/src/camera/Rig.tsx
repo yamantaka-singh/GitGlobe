@@ -124,7 +124,7 @@ export function Rig({ radius }: { radius: number }) {
     const c = ref.current;
     globeCamera.controls = c;
 
-    c.minDistance = radius * 1.04; // never let the camera inside the shell
+    c.minDistance = radius * 1.002; // never let the camera inside the shell
     c.maxDistance = radius * 6;
     c.dollySpeed = 0.6;
     c.truckSpeed = 0;
