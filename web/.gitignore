@@ -9,3 +9,4 @@ public/tiles/
 # Planet diagnostics — reproducible with `npm run preview:planet`
 public/planet-preview.png
 public/planet-globe.png
+.vercel

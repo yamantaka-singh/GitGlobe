@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { API } from '../api';
 import { useQuery } from '@tanstack/react-query';
 import { useGlobeStore } from '../store/useGlobeStore';
 import { sceneIndex } from '../globe/Scene';
@@ -43,7 +44,7 @@ export function SearchBox() {
     queryKey: ['search', debouncedQuery],
     queryFn: async () => {
       if (!debouncedQuery.trim()) return [];
-      const res = await fetch(`http://localhost:8000/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`);
+      const res = await fetch(`${API}/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`);
       if (!res.ok) throw new Error('Search failed');
       const rawData = await res.json();
       const mapped: SearchResult[] = rawData.map((item: any) => {

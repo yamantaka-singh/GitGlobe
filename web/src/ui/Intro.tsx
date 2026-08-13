@@ -49,7 +49,7 @@ export function Intro() {
           has neighbours.
         </h1>
         <p className="intro__body">
-          A hundred thousand projects placed by what they do, not what they are called. Connected by
+          Nearly two hundred thousand projects placed by what they do, not what they are called. Connected by
           dependency, weighted by PageRank, navigable by hand or by conversation.
         </p>
 
