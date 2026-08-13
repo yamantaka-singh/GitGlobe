@@ -3,10 +3,10 @@
 ![Status](https://img.shields.io/badge/Status-Shipped-success?style=for-the-badge)
 ![Tech](https://img.shields.io/badge/WebGL-Three.js-black?style=for-the-badge&logo=three.js)
 ![Tech](https://img.shields.io/badge/Agent-Claude_Sonnet_4.5-coral?style=for-the-badge&logo=anthropic)
-![Data](https://img.shields.io/badge/Nodes-87%2C227-blue?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-446_across_19_suites-green?style=for-the-badge)
+![Data](https://img.shields.io/badge/Nodes-198%2C731-blue?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-506_across_19_suites-green?style=for-the-badge)
 
-**A 3D interactive globe of the open-source universe.** 87,227 repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, zooming, and talking to an AI that flies the camera for you.
+**A 3D interactive globe of the open-source universe.** 198,731 repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, zooming, and talking to an AI that flies the camera for you.
 
 Every repository carries a **measured global rank** — its position among all ~420M public repositories, from an empirically sampled star distribution rather than an assumed power law — and a **quality score** distilled from an LLM into a gradient-boosted regressor that is never shown a star count.
 
@@ -81,7 +81,7 @@ Four ideas do the heavy lifting:
 
 **3. The LLM never invents coordinates.** An agent that outputs `fly_to(lat: 42.1, lon: -80.3)` will hallucinate. GitGlobe's agent outputs *repository IDs*; the client looks up their real positions and computes the camera target. The model reasons about software; the renderer owns geometry. See [ADR-006](docs/ARCHITECTURE.md#adr-006-agent-camera-control-protocol).
 
-**4. Edges are demand-loaded.** 87k nodes carry 234,640 CSR entries, and drawing them all is neither possible nor useful — it's a hairball. Arcs appear only for the focused node's neighborhood, capped at ~2,000.
+**4. Edges are demand-loaded.** 198k nodes carry 234,640 CSR entries, and drawing them all is neither possible nor useful — it's a hairball. Arcs appear only for the focused node's neighborhood, capped at ~2,000.
 
 **5. The ranking model is blindfolded to popularity.** An LLM teacher rates a stratified sample of repositories against a six-dimension rubric; a gradient-boosted regressor written from scratch in NumPy distils those judgements to the whole corpus. Star and fork counts are stripped from both the teacher's prompt and the student's features, enforced by tests — without that, the model just relearns stars under a new name. A dimension is only stored if its held-out RMSE beats predicting the mean by more than sampling noise.
 
@@ -229,6 +229,8 @@ Worth stating up front, because they shape the product.
 - **Popularity bias is real.** Any star-derived size or ranking amplifies the already-visible. The criticality-score blend mitigates it; it does not remove it.
 
 ---
+
+
 
 ## Documentation
 
