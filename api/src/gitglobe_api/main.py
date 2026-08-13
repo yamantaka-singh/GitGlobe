@@ -151,11 +151,19 @@ async def search_repos(q: str = Query(..., min_length=2)):
             query_vector = await get_query_embedding(q)
             
             # 2. Qdrant Dense Search
-            dense_hits = await state.qdrant.search(
-                collection_name="gitglobe_repos",
-                query_vector=query_vector,
-                limit=50
-            )
+            if hasattr(state.qdrant, "query_points"):
+                res = await state.qdrant.query_points(
+                    collection_name="gitglobe_repos",
+                    query=query_vector,
+                    limit=50
+                )
+                dense_hits = res.points
+            else:
+                dense_hits = await state.qdrant.search(
+                    collection_name="gitglobe_repos",
+                    query_vector=query_vector,
+                    limit=50
+                )
             
             rrf_results = reciprocal_rank_fusion(dense_hits, [], k=60)
             top_50 = rrf_results[:50]
