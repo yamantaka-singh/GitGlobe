@@ -230,6 +230,51 @@ Worth stating up front, because they shape the product.
 
 ---
 
+## Team
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="260">
+        <a href="https://github.com/ydabas-hue">
+          <img src="./docs/assets/maki.jpg" width="165" height="165" alt="Yashasvi Dabas" style="border-radius:50%; object-fit:cover; border: 4px solid #30363d; box-shadow: 0 8px 24px rgba(0,0,0,0.6);"/>
+          <br />
+          <br />
+          <b>Yashasvi</b><br /><b>Dabas</b>
+        </a>
+        <br />
+        <br />
+        <a href="https://github.com/ydabas-hue">
+          <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" width="48" height="48" alt="GitHub" />
+        </a>
+        &nbsp;&nbsp;
+        <a href="https://www.linkedin.com/in/yashasvi-the-boss">
+          <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" width="48" height="48" alt="LinkedIn" />
+        </a>
+      </td>
+      <td align="center" width="260">
+        <a href="https://github.com/yamantaka-singh">
+          <img src="./docs/assets/toji.jpg" width="165" height="165" alt="Mrityunjay Singh" style="border-radius:50%; object-fit:cover; border: 4px solid #30363d; box-shadow: 0 8px 24px rgba(0,0,0,0.6);"/>
+          <br />
+          <br />
+          <b>Mrityunjay</b><br /><b>Singh</b>
+        </a>
+        <br />
+        <br />
+        <a href="https://github.com/yamantaka-singh">
+          <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" width="48" height="48" alt="GitHub" />
+        </a>
+        &nbsp;&nbsp;
+        <a href="https://www.linkedin.com/in/yamantakasingh">
+          <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" width="48" height="48" alt="LinkedIn" />
+        </a>
+      </td>
+    </tr>
+  </table>
+</div>
+
+---
+
 ## Documentation
 
 - [Architecture & ADRs](docs/ARCHITECTURE.md) — components, data model, tile format, projection math, agent protocol, cost model

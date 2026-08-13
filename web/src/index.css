@@ -843,3 +843,105 @@ button:focus-visible {
   font-weight: 500;
   color: var(--color-on-primary);
 }
+
+/* ---------------------------------------------------------------- intro team */
+
+.intro__team {
+  display: flex;
+  flex-direction: row;
+  gap: 32px;
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+
+.intro__team-member {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+
+.intro__team-avatar {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.intro__team-avatar:hover {
+  transform: scale(1.08);
+}
+
+.intro__team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.intro__team-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cyan);
+  font-family: var(--mono);
+  letter-spacing: 0.03em;
+  min-height: 40px;
+  text-shadow: 0 0 10px rgba(110, 139, 232, 0.4);
+}
+
+.typewriter-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  font-weight: 400;
+  color: var(--line-strong);
+  animation: typewriterBlink 0.8s infinite;
+}
+
+@keyframes typewriterBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.intro__team-badges {
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.btn-icon-glossy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-icon-glossy img {
+  width: 39px;
+  height: 39px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.25s ease;
+}
+
+.btn-icon-glossy:hover img {
+  transform: translateY(-2px) scale(1.18);
+  filter: drop-shadow(0 0 10px rgba(110, 139, 232, 0.6)) brightness(1.1);
+}
+
+.btn-icon-glossy:active img {
+  transform: translateY(0) scale(0.94);
+}
+
+.btn-icon-glossy:active img {
+  transform: translateY(0) scale(0.94);
+}

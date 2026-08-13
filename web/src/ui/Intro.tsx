@@ -3,6 +3,49 @@ import { useGlobeStore } from '../store/useGlobeStore';
 import { globeCamera } from '../camera/Rig';
 import { group } from './num';
 
+function TypewriterName({ firstName, lastName }: { firstName: string; lastName: string }) {
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
+
+  useEffect(() => {
+    let i = 0;
+    const totalFirst = firstName.length;
+    const totalLast = lastName.length;
+
+    setFirst('');
+    setLast('');
+
+    const timer = setInterval(() => {
+      if (i <= totalFirst) {
+        setFirst(firstName.slice(0, i));
+      } else if (i <= totalFirst + totalLast) {
+        setLast(lastName.slice(0, i - totalFirst));
+      } else {
+        clearInterval(timer);
+      }
+      i++;
+    }, 70);
+
+    return () => clearInterval(timer);
+  }, [firstName, lastName]);
+
+  const isDoneFirst = first.length === firstName.length;
+
+  return (
+    <span className="typewriter-name">
+      <span className="typewriter-line">
+        {first}
+        {!isDoneFirst && <span className="typewriter-cursor">|</span>}
+      </span>
+      <br />
+      <span className="typewriter-line">
+        {last}
+        {isDoneFirst && <span className="typewriter-cursor">|</span>}
+      </span>
+    </span>
+  );
+}
+
 /**
  * The entry moment.
  *
@@ -75,6 +118,45 @@ export function Intro() {
             <dd>synthetic v2</dd>
           </div>
         </dl>
+
+        <div className="intro__team">
+          <div className="intro__team-member">
+            <a href="https://github.com/ydabas-hue" target="_blank" rel="noreferrer">
+              <img src="/maki.jpg" alt="Yashasvi" className="intro__team-avatar" />
+            </a>
+            <div className="intro__team-info">
+              <div className="intro__team-name">
+                <TypewriterName firstName="Yashasvi" lastName="Dabas" />
+              </div>
+              <div className="intro__team-badges">
+                <a href="https://github.com/ydabas-hue" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="GitHub">
+                  <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" alt="GitHub" />
+                </a>
+                <a href="https://www.linkedin.com/in/yashasvi-the-boss" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="LinkedIn">
+                  <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" alt="LinkedIn" />
+                </a>
+              </div>
+            </div>
+          </div>
+          <div className="intro__team-member">
+            <a href="https://github.com/yamantaka-singh" target="_blank" rel="noreferrer">
+              <img src="/toji.jpg" alt="Mrityunjay" className="intro__team-avatar" />
+            </a>
+            <div className="intro__team-info">
+              <div className="intro__team-name">
+                <TypewriterName firstName="Mrityunjay" lastName="Singh" />
+              </div>
+              <div className="intro__team-badges">
+                <a href="https://github.com/yamantaka-singh" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="GitHub">
+                  <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" alt="GitHub" />
+                </a>
+                <a href="https://www.linkedin.com/in/yamantakasingh" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="LinkedIn">
+                  <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" alt="LinkedIn" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
