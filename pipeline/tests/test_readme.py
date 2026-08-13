@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gitglobe.clean.readme import (  # noqa: E402
+from gitglobe.clean.readme import (
     MIN_SIGNAL_CHARS,
     clean_readme,
     normalise_heading,

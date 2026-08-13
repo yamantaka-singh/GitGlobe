@@ -100,7 +100,11 @@ async def stage_embed(
     if dry_run:
         return StageResult("embed", 0, forecast)
 
-    config = EmbedConfig(project=settings.gcp_project, dimensions=DEFAULT_DIM)
+    config = EmbedConfig(
+        project=settings.gcp_project,
+        dimensions=DEFAULT_DIM,
+        gcs_bucket=getattr(settings, "gcs_bucket", "")
+    )
     written = 0
 
     async with VertexEmbedder(config) as embedder:
@@ -111,9 +115,18 @@ async def stage_embed(
             )
             log.info("Stored %d/%d", written, len(pending))
 
-        await embedder.embed_many(
-            [(r["id"], r["embedding_input"]) for r in pending], on_batch=persist
-        )
+        if forecast.get("recommend_batch_prediction"):
+            log.info("Using Vertex Batch Prediction (batch > 300k).")
+            results = await embedder.embed_batch(
+                [(r["id"], r["embedding_input"]) for r in pending]
+            )
+            if results:
+                await persist(results)
+        else:
+            await embedder.embed_many(
+                [(r["id"], r["embedding_input"]) for r in pending], on_batch=persist
+            )
+
         log.info(embedder.stats.summary())
         if embedder.stats.failures:
             log.warning("Failures by reason: %s", embedder.stats.failures)
@@ -335,7 +348,7 @@ async def stage_edges(
     if probe_only:
         try:
             tables = extractor.list_dataset_tables()
-        except Exception as exc:  # noqa: BLE001 - a probe must never be fatal
+        except Exception as exc:
             tables = [{"table_id": f"ERROR: {exc}"}]
         # The per-ecosystem `*Requirements` tables are two to four ORDERS OF
         # MAGNITUDE smaller than `Dependencies` (95 TiB) or
@@ -354,7 +367,7 @@ async def stage_edges(
         ):
             try:
                 schemas[table.rsplit(".", 1)[1]] = extractor.describe_table(table)
-            except Exception as exc:  # noqa: BLE001 - a probe must not be fatal
+            except Exception as exc:
                 schemas[table.rsplit(".", 1)[1]] = [{"field_path": f"ERROR: {exc}"}]
         return StageResult("edges", 0, {
             "probe": extractor.probe_package_to_repo(),
@@ -521,7 +534,7 @@ def _region_clusters(theta, phi, *, seed: int, regions: int = DEFAULT_REGIONS):
         noise_count=0,
         params={
             "method": "regions",
-            "regions": int(len(present)),
+            "regions": len(present),
             "median_size": int(np.median(sizes[present])),
             "tightness_mean": round(float(tightness[present].mean()), 4),
             "tightness_best": round(float(tightness[present].max()), 4),
@@ -709,7 +722,7 @@ async def diagnose_graph(db) -> dict:
     The number that matters most is the composition of the LARGEST community:
     what is actually holding 55% of the corpus together, and via which edges.
     """
-    from .graph.communities import build_adjacency, detect
+    from .graph.communities import detect
 
     rows = await db.world_rows()
     n = len(rows)
@@ -918,7 +931,7 @@ async def stage_rank(db: Database, *, used_with_scale: float = 0.7) -> StageResu
 
     await db.store_ranks({int(r["id"]): float(v) for r, v in zip(rows, result.rank)})
     return StageResult("rank", len(rows), {
-        "edges": int(len(src)), "iterations": result.iterations,
+        "edges": len(src), "iterations": result.iterations,
         "converged": result.converged,
     })
 

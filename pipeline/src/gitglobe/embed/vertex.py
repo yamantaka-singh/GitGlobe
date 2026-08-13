@@ -51,7 +51,7 @@ MAX_INPUT_CHARS = 6_500
 #: against long documents, a different and asymmetric objective.
 TASK_TYPE = "CLUSTERING"
 
-DEFAULT_CONCURRENCY = 32
+DEFAULT_CONCURRENCY = 16
 CHECKPOINT_EVERY = 2_000
 
 #: Published rate for gemini-embedding-001, USD per million input tokens.
@@ -69,6 +69,14 @@ class EmbedConfig:
     concurrency: int = DEFAULT_CONCURRENCY
     max_retries: int = 5
     timeout_s: float = 60.0
+    gcs_bucket: str = ""
+
+    @property
+    def batch_endpoint(self) -> str:
+        return (
+            f"https://{self.location}-aiplatform.googleapis.com/v1/projects/{self.project}"
+            f"/locations/{self.location}/batchPredictionJobs"
+        )
 
     @property
     def endpoint(self) -> str:
@@ -189,6 +197,7 @@ class VertexEmbedder:
         """One text to one unit vector. None if it failed after every retry."""
         import httpx
 
+        assert isinstance(text, str) and text, "Text payload must be a non-empty string"
         prepared, truncated = prepare_text(text)
         if not prepared:
             return None
@@ -279,7 +288,7 @@ class VertexEmbedder:
             try:
                 async with semaphore:
                     vector = await self.embed_one(text)
-            except Exception as exc:  # noqa: BLE001 - one row must not end the run
+            except Exception as exc:
                 # `gather` propagates the FIRST exception and cancels the rest,
                 # so anything escaping here costs the entire unpersisted batch —
                 # embeddings already paid for. Contain it at the worker.
@@ -306,6 +315,146 @@ class VertexEmbedder:
 
         if on_batch and pending:
             await on_batch(dict(pending))
+        return results
+
+    async def embed_batch(self, items: list[tuple[int, str]]) -> dict[int, np.ndarray]:
+        """Process embeddings via Vertex Batch Prediction (for runs > 100k).
+        
+        This is fully asynchronous, costs half as much, and bypasses HTTP rate limits.
+        We write a JSONL to GCS, submit a BatchPredictionJob, poll it, and download
+        the results. Extra keys (like repo_id) in the instance are safely echoed
+        back in the results by Vertex.
+        """
+        import json
+        import urllib.parse
+        import datetime
+
+        if not self.config.gcs_bucket:
+            raise RuntimeError("GCS_BUCKET must be set in settings to use batch prediction.")
+
+        bucket = self.config.gcs_bucket
+        job_id = f"gitglobe-embed-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+        input_name = f"batch-input/{job_id}.jsonl"
+        output_prefix = f"batch-output/{job_id}/"
+
+        log.info("Preparing batch input for %d items...", len(items))
+        lines = []
+        for rid, text in items:
+            prepared, truncated = prepare_text(text)
+            if prepared:
+                if truncated:
+                    self.stats.truncated += 1
+                lines.append(json.dumps({
+                    "content": prepared,
+                    "task_type": TASK_TYPE,
+                    "repo_id": rid
+                }))
+
+        if not lines:
+            return {}
+
+        jsonl_data = "\n".join(lines).encode("utf-8")
+        self.stats.requested += len(lines)
+
+        # 1. Upload to GCS using standard HTTP
+        log.info("Uploading %d bytes to gs://%s/%s", len(jsonl_data), bucket, input_name)
+        upload_url = f"https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o?uploadType=media&name={urllib.parse.quote(input_name, safe='')}"
+        res = await self._client.post(
+            upload_url,
+            headers={"Authorization": f"Bearer {self._token()}", "Content-Type": "application/jsonl"},
+            content=jsonl_data,
+        )
+        if res.status_code >= 400:
+            raise RuntimeError(f"GCS upload failed: {res.status_code} {res.text}")
+
+        # 2. Trigger Batch Job
+        log.info("Starting Vertex AI Batch Prediction job %s...", job_id)
+        body = {
+            "displayName": job_id,
+            "model": f"projects/{self.config.project}/locations/{self.config.location}/publishers/google/models/{self.config.model}",
+            "inputConfig": {
+                "instancesFormat": "jsonl",
+                "gcsSource": {"uris": [f"gs://{bucket}/{input_name}"]}
+            },
+            "outputConfig": {
+                "predictionsFormat": "jsonl",
+                "gcsDestination": {"outputUriPrefix": f"gs://{bucket}/{output_prefix}"}
+            }
+        }
+        res = await self._client.post(
+            self.config.batch_endpoint,
+            json=body,
+            headers={"Authorization": f"Bearer {self._token()}"}
+        )
+        if res.status_code >= 400:
+            raise RuntimeError(f"Batch Job submission failed: {res.status_code} {res.text}")
+
+        job_name = res.json()["name"]
+
+        # 3. Poll
+        log.info("Job started. Polling every 60s...")
+        while True:
+            await asyncio.sleep(60)
+            res = await self._client.get(
+                f"https://{self.config.location}-aiplatform.googleapis.com/v1/{job_name}",
+                headers={"Authorization": f"Bearer {self._token()}"}
+            )
+            state = res.json().get("state")
+            log.info("Job state: %s", state)
+            if state == "JOB_STATE_SUCCEEDED":
+                break
+            if state in ("JOB_STATE_FAILED", "JOB_STATE_CANCELLED", "JOB_STATE_PARTIALLY_SUCCEEDED"):
+                log.warning("Batch job incomplete: %s", res.text)
+                if state != "JOB_STATE_PARTIALLY_SUCCEEDED":
+                    raise RuntimeError(f"Batch job failed: {state}")
+                break
+
+        # 4. Download and parse results
+        log.info("Fetching results from GCS gs://%s/%s ...", bucket, output_prefix)
+        res = await self._client.get(
+            f"https://storage.googleapis.com/storage/v1/b/{bucket}/o?prefix={urllib.parse.quote(output_prefix, safe='')}",
+            headers={"Authorization": f"Bearer {self._token()}"}
+        )
+        if res.status_code >= 400:
+            raise RuntimeError(f"GCS list failed: {res.status_code} {res.text}")
+
+        results: dict[int, np.ndarray] = {}
+        for item in res.json().get("items", []):
+            if not item["name"].endswith(".jsonl"):
+                continue
+            dl = await self._client.get(
+                f"https://storage.googleapis.com/storage/v1/b/{bucket}/o/{urllib.parse.quote(item['name'], safe='')}?alt=media",
+                headers={"Authorization": f"Bearer {self._token()}"}
+            )
+            if dl.status_code >= 400:
+                log.warning("Failed to download %s", item["name"])
+                continue
+
+            for line in dl.text.splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if "error" in row:
+                    self._record_failure("batch_error")
+                    continue
+
+                repo_id = int(row.get("instance", {}).get("repo_id", -1))
+                if repo_id == -1:
+                    continue
+
+                try:
+                    preds = row["predictions"]
+                    # Depending on model version, it might be dict or list.
+                    if isinstance(preds, list):
+                        values = preds[0]["embeddings"]["values"]
+                    else:
+                        values = preds["embeddings"]["values"]
+
+                    results[repo_id] = np.asarray(values, dtype=np.float32)
+                    self.stats.succeeded += 1
+                except (KeyError, IndexError, TypeError) as exc:
+                    self._record_failure(f"malformed_batch_{type(exc).__name__}")
+
         return results
 
 

@@ -21,7 +21,6 @@ from dataclasses import dataclass, field
 
 from prefect import flow, get_run_logger, task
 from prefect.cache_policies import NO_CACHE
-from prefect.cache_policies import NO_CACHE
 
 from .clean.readme import clean_readme
 from .db import Database, RepoRow
@@ -78,7 +77,7 @@ async def ingest_repositories(db: Database, settings: Settings, target: int) -> 
             # records nothing, so a later run retries it cleanly.
             try:
                 hit_cap = await _drain(gh, db, band_query(band), state, logger)
-            except Exception as exc:  # noqa: BLE001 - one band is not the run
+            except Exception as exc:
                 state.failed_bands.append(band)
                 logger.warning("Band %s failed (%s) — skipping, will retry next run", band, exc)
                 continue
@@ -90,7 +89,7 @@ async def ingest_repositories(db: Database, settings: Settings, target: int) -> 
                         break
                     try:
                         await _drain(gh, db, sub, state, logger)
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         state.failed_bands.append(sub)
                         logger.warning("Sub-query failed (%s) — skipping", exc)
             elif not hit_cap:

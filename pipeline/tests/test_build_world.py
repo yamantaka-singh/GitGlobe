@@ -24,10 +24,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.graph.pagerank import pagerank  # noqa: E402
-from gitglobe.tiles.build import (  # noqa: E402
+from gitglobe.graph.pagerank import pagerank
+from gitglobe.tiles.build import (
     WorldInput,
     build_world,
     cluster_manifest_entries,
@@ -35,7 +35,7 @@ from gitglobe.tiles.build import (  # noqa: E402
     rank_order,
     select_ambient,
 )
-from gitglobe.tiles.format import FLAG_ARCHIVED, FLAG_FORK, FLAG_LOW_SIGNAL, TAU  # noqa: E402
+from gitglobe.tiles.format import FLAG_ARCHIVED, FLAG_FORK, FLAG_LOW_SIGNAL, TAU
 
 WEB = Path(__file__).resolve().parents[2] / "web"
 VERIFIER = WEB / "scripts" / "verify-world.ts"
@@ -256,12 +256,11 @@ class TestBuildBehaviour(unittest.TestCase):
         # decodes fine and renders points at undefined locations.
         world, edges, result = synthetic_world(n=400)
         world.theta[3] = np.nan
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(ValueError):
-                build_world(
-                    world, edges=edges, pagerank_result=result,
-                    out_dir=Path(tmp), domains=DOMAINS,
-                )
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
+            build_world(
+                world, edges=edges, pagerank_result=result,
+                out_dir=Path(tmp), domains=DOMAINS,
+            )
 
 
 class TestClusterEntries(unittest.TestCase):

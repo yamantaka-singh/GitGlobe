@@ -14,9 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.checks.neighbours import (  # noqa: E402
+from gitglobe.checks.neighbours import (
     DEFAULT_EXPECTATIONS,
     Expectation,
     baseline_distance,

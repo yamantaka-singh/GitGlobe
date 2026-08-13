@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.embed.vertex import (  # noqa: E402
+from gitglobe.embed.vertex import (
     MAX_INPUT_CHARS,
     estimate,
     l2_normalise,
@@ -29,7 +29,7 @@ from gitglobe.embed.vertex import (  # noqa: E402
     unpack,
     unpack_matrix,
 )
-from gitglobe.project.spherical import (  # noqa: E402
+from gitglobe.project.spherical import (
     TAU,
     ProjectionResult,
     assess_coverage,
@@ -165,7 +165,23 @@ class TestKnnToEdges(unittest.TestCase):
         self.assertFalse(any(a == b for a, b, _ in edges))
 
     def test_missing_knn_returns_nothing(self) -> None:
+        # Correct HERE, and dangerous one layer down: `replace_similar_edges`
+        # used to truncate the whole similar_to layer before inserting, so this
+        # empty list silently deleted 237,538 edges when UMAP's subsample path
+        # stopped populating its kNN graph. That method now refuses an empty
+        # list outright — this stays as the local contract, not a green light.
         self.assertEqual(knn_to_edges(None, None, np.array([1])), [])
+
+    def test_column_zero_is_treated_as_the_point_itself(self) -> None:
+        # The producer/consumer convention that `_knn_graph` has to honour.
+        # pynndescent returns the query point in column 0; if that ever changed,
+        # every repository would be "similar to" itself and the mutual-pair
+        # filter would happily let those through as real edges.
+        indices = np.array([[0, 1], [1, 0]])
+        distances = np.array([[0.0, 0.1], [0.0, 0.1]])
+        edges = knn_to_edges(indices, distances, np.array([10, 20]), k=1)
+        self.assertTrue(all(a != b for a, b, _ in edges))
+        self.assertEqual(sorted((a, b) for a, b, _ in edges), [(10, 20)])
 
 
 class TestProjectionResult(unittest.TestCase):

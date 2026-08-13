@@ -159,7 +159,7 @@ def stability(
 ) -> StabilityCurve:
     """Markov stability of a partition across a range of Markov times."""
     probs, pi, degree = transition_matrix(offsets, targets, weights)
-    curve = StabilityCurve(communities=int(len(np.unique(labels))))
+    curve = StabilityCurve(communities=len(np.unique(labels)))
     if probs is None:
         return curve
 

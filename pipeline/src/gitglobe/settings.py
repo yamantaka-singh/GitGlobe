@@ -61,6 +61,7 @@ def _tokens() -> list[str]:
 class Settings:
     database_url: str
     github_tokens: list[str] = field(default_factory=list)
+    gcs_bucket: str = ""
     gcp_project: str = ""
     nvidia_api_key: str = ""
     teacher_provider: str = "nim"
@@ -82,6 +83,7 @@ class Settings:
                 "DATABASE_URL", "postgresql://gitglobe:gitglobe@localhost:5433/gitglobe"
             ),
             github_tokens=_tokens(),
+            gcs_bucket=os.getenv("GCS_BUCKET", ""),
             gcp_project=os.getenv("GCP_PROJECT", ""),
             nvidia_api_key=os.getenv("NVIDIA_API_KEY", "").strip(),
             teacher_provider=os.getenv("TEACHER_PROVIDER", "nim").strip().lower(),

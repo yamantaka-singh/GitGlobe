@@ -7,3 +7,5 @@ __pycache__/
 .env
 *.db
 *.sqlite
+.agents/
+*.sql

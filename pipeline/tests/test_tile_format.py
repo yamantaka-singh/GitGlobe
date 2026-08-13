@@ -28,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
 from gitglobe.tiles.format import (
     KIND_MASK,
@@ -36,8 +36,7 @@ from gitglobe.tiles.format import (
     MAX_KIND,
     WEIGHT_MASK,
     WEIGHT_OUTGOING,
-    build_undirected_csr,
-    pack_weight_and_kind,  # noqa: E402
+    pack_weight_and_kind,
     TAU,
     BandSpec,
     GraphArrays,

@@ -12,7 +12,6 @@ the checks here are aimed squarely at it:
 
 from __future__ import annotations
 
-import math
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -20,15 +19,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.brain.features import (  # noqa: E402
+from gitglobe.brain.features import (
     GraphFeatures,
     build_features,
     describe,
     reduce_embeddings,
 )
-from gitglobe.brain.rubric import (  # noqa: E402
+from gitglobe.brain.rubric import (
     DIMENSION_KEYS,
     DIMENSIONS,
     SYSTEM_PROMPT,
@@ -36,7 +35,7 @@ from gitglobe.brain.rubric import (  # noqa: E402
     build_teacher_prompt,
     parse_teacher_response,
 )
-from gitglobe.brain.sampling import (  # noqa: E402
+from gitglobe.brain.sampling import (
     STAR_BANDS,
     allocate,
     band_of,
@@ -76,9 +75,8 @@ class TestRubricCannotLeakPopularity(unittest.TestCase):
 
     def test_a_labelled_popularity_field_is_caught(self) -> None:
         for leak in ('<stars>84000</stars>', 'stars: 84000', '"forks": 12'):
-            with self.subTest(leak=leak):
-                with self.assertRaises(ValueError):
-                    assert_no_popularity(f"<repository>{leak}</repository>")
+            with self.subTest(leak=leak), self.assertRaises(ValueError):
+                assert_no_popularity(f"<repository>{leak}</repository>")
 
     def test_the_word_stars_in_readme_prose_is_not_a_leak(self) -> None:
         # "give us a star" appears in a huge number of READMEs. Rejecting those

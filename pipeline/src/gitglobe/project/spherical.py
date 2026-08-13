@@ -68,6 +68,11 @@ class ProjectionParams:
             "output_metric": "haversine",
         }
 
+    # Maximum points to use for fitting the manifold. If the dataset is larger,
+    # we fit on a random subset and transform the rest. 50k is enough to define
+    # the global geometry of a 500k corpus without OOMing the CPU.
+    max_fit_samples: int = 50_000
+
 
 @dataclass
 class ProjectionResult:
@@ -150,14 +155,32 @@ def project(
         random_state=params.seed,
         verbose=True,
     )
-    embedding = reducer.fit_transform(vectors)
+
+    if n <= params.max_fit_samples:
+        embedding = reducer.fit_transform(vectors)
+        knn_indices = getattr(reducer, "_knn_indices", None) if keep_knn else None
+        knn_distances = getattr(reducer, "_knn_dists", None) if keep_knn else None
+    else:
+        log.info("Dataset > %d; fitting manifold on a random subset and "
+                 "transforming the rest.", params.max_fit_samples)
+        rng = np.random.default_rng(params.seed)
+        sample_indices = rng.choice(n, params.max_fit_samples, replace=False)
+        reducer.fit(vectors[sample_indices])
+        embedding = reducer.transform(vectors)
+        # `transform` never populates `_knn_indices` — the graph is a side
+        # effect of `fit_transform` only. Returning None here silently deleted
+        # every `similar_to` edge, because `replace_similar_edges` truncates
+        # before it inserts. Recompute instead: the arrays are (n, 30) int32,
+        # so 198k points is ~24 MB and roughly a minute — the OOM risk in this
+        # function was always the UMAP layout, never the kNN graph.
+        knn_indices, knn_distances = _knn_graph(vectors, params) if keep_knn else (None, None)
 
     theta, phi = wrap_to_sphere(embedding[:, 0], embedding[:, 1])
     return ProjectionResult(
         theta=theta,
         phi=phi,
-        knn_indices=getattr(reducer, "_knn_indices", None) if keep_knn else None,
-        knn_distances=getattr(reducer, "_knn_dists", None) if keep_knn else None,
+        knn_indices=knn_indices,
+        knn_distances=knn_distances,
         params=params.to_dict(),
     )
 
@@ -219,6 +242,37 @@ def assess_coverage(stats: dict) -> list[str]:
             f"density Gini {stats['gini']:.2f} — almost everything is in a few cells"
         )
     return problems
+
+
+def _knn_graph(vectors: np.ndarray, params: "ProjectionParams") -> tuple:
+    """Full-corpus kNN graph, for when UMAP was fitted on a subsample.
+
+    `pynndescent` is what UMAP uses internally and is already installed, so
+    this adds no dependency — it is the same NN-descent, run over all the
+    points instead of the 50k the manifold was fitted on.
+
+    Same metric and seed as the projection on purpose: `similar_to` edges are
+    meant to agree with the positions they sit beside, and computing them under
+    a different metric would produce neighbours the globe does not show as near.
+    """
+    from pynndescent import NNDescent
+
+    log.info("kNN over all %d points for similar_to edges", len(vectors))
+    
+    # Numba compilation fails in pynndescent if the input array is read-only.
+    if not vectors.flags.writeable:
+        vectors = vectors.copy()
+        
+    index = NNDescent(
+        vectors,
+        metric=params.metric,
+        n_neighbors=params.n_neighbors,
+        random_state=params.seed,
+        low_memory=True,
+    )
+    indices, distances = index.neighbor_graph
+    # Column 0 is the point itself, which is what `knn_to_edges` expects.
+    return indices, distances
 
 
 def knn_to_edges(

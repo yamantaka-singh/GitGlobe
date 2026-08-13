@@ -14,12 +14,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gitglobe.rank.calibrate import (  # noqa: E402
+from gitglobe.rank.calibrate import (
     GlobalRank,
     RepoSignals,
     composite_score,
 )
-from gitglobe.rank.global_scale import (  # noqa: E402
+from gitglobe.rank.global_scale import (
     STAR_LADDER,
     STAR_REFERENCE_MAX,
     StarScale,

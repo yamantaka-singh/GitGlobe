@@ -24,6 +24,7 @@ recursion, and a complete tree has none — the loop bound is `max_depth`.
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 from dataclasses import dataclass, field
 
@@ -292,6 +293,15 @@ def _fit_one(bins, y, val_bins, val_y, *, seed: int) -> tuple:
     return base, trees[:best_n], history
 
 
+def _fit_dimension_worker(key: str, bins_train: np.ndarray, y_train: np.ndarray, bins_test: np.ndarray, y_test: np.ndarray, values_test: np.ndarray, edges: list, feature_names: list, seed: int) -> tuple:
+    base, trees, history = _fit_one(bins_train, y_train, bins_test, y_test, seed=seed)
+    student = Student(key, base, trees, edges, list(feature_names))
+    student.holdout = score(student, values_test, y_test)
+    student.holdout["trees"] = len(trees)
+    student.holdout["rmse_curve"] = [round(h, 3) for h in history[:6]]
+    return key, student, len(trees), student.holdout
+
+
 def fit(values, labels: dict, feature_names: list, *, train_idx, test_idx, seed: int = 11) -> dict:
     """Train one student per rubric dimension. Returns dimension -> Student."""
     values = np.asarray(values, dtype=np.float64)
@@ -304,27 +314,39 @@ def fit(values, labels: dict, feature_names: list, *, train_idx, test_idx, seed:
     bins, edges = bin_features(values)
     students = {}
 
-    for key in DIMENSION_KEYS:
-        if key not in labels:
-            log.warning("No teacher labels for dimension %r — skipping", key)
-            continue
-        y = np.asarray(labels[key], dtype=np.float64)
-        if len(y) != len(values):
-            raise ValueError(f"{key}: {len(y)} labels for {len(values)} rows")
+    futures = []
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        for key in DIMENSION_KEYS:
+            if key not in labels:
+                log.warning("No teacher labels for dimension %r — skipping", key)
+                continue
+            y = np.asarray(labels[key], dtype=np.float64)
+            if len(y) != len(values):
+                raise ValueError(f"{key}: {len(y)} labels for {len(values)} rows")
 
-        base, trees, history = _fit_one(
-            bins[train_idx], y[train_idx], bins[test_idx], y[test_idx], seed=seed
-        )
-        student = Student(key, base, trees, edges, list(feature_names))
-        student.holdout = score(student, values[test_idx], y[test_idx])
-        student.holdout["trees"] = len(trees)
-        student.holdout["rmse_curve"] = [round(h, 3) for h in history[:6]]
-        students[key] = student
-        log.info(
-            "%s: %d trees, held-out RMSE %.2f, R2 %.3f (baseline RMSE %.2f)",
-            key, len(trees), student.holdout["rmse"], student.holdout["r2"],
-            student.holdout["baseline_rmse"],
-        )
+            futures.append(
+                executor.submit(
+                    _fit_dimension_worker,
+                    key,
+                    bins[train_idx],
+                    y[train_idx],
+                    bins[test_idx],
+                    y[test_idx],
+                    values[test_idx],
+                    edges,
+                    list(feature_names),
+                    seed,
+                )
+            )
+
+        for future in concurrent.futures.as_completed(futures):
+            key, student, n_trees, holdout = future.result()
+            students[key] = student
+            log.info(
+                "%s: %d trees, held-out RMSE %.2f, R2 %.3f (baseline RMSE %.2f)",
+                key, n_trees, holdout["rmse"], holdout["r2"],
+                holdout["baseline_rmse"],
+            )
 
     return students
 

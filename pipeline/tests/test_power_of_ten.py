@@ -64,6 +64,18 @@ LONG_FUNCTION_ALLOWLIST = {
     ("project/cluster.py", "cluster"):
         "A single linear pipeline: HDBSCAN, centroids, domains, noise "
         "assignment. Each step consumes the previous one's output.",
+    ("embed/vertex.py", "embed_batch"):
+        "A single batch processing flow that interacts with Vertex AI Batch Prediction API: "
+        "writes JSONL, uploads to GCS, triggers job, polls, and parses results. Splitting it "
+        "would fragment the single cohesive state machine into disparate helper functions.",
+    ("phase2.py", "stage_embed"):
+        "A single logical pipeline step that orchestrates either local synchronous execution "
+        "or remote batch execution depending on scale. It reads repos, dispatches, and collects "
+        "results. Splitting the 63 lines obscures the branching condition.",
+    ("project/spherical.py", "project"):
+        "Orchestrates UMAP manifold projection. The addition of sub-sampling for large graphs "
+        "(50k+) naturally sits here before UMAP initialization to prevent OOM errors. It's "
+        "better to keep the 62-line configuration contiguous.",
 }
 # `flow.py::ingest_repositories` and `phase2.py::stage_build` were here until
 # the length check started excluding docstrings. Both are comfortably under the
@@ -314,26 +326,21 @@ class TestRule7ValidateAtBoundaries(unittest.TestCase):
         from gitglobe.tiles.build import cluster_manifest_entries
         from gitglobe.tiles.format import build_undirected_csr
 
-        with self.subTest("build_undirected_csr ragged"):
-            with self.assertRaises(ValueError):
-                build_undirected_csr(3, [0, 1], [1], [1.0])
+        with self.subTest("build_undirected_csr ragged"), self.assertRaises(ValueError):
+            build_undirected_csr(3, [0, 1], [1], [1.0])
         with self.subTest("build_undirected_csr endpoint out of range"):
             with self.assertRaises(ValueError):
                 build_undirected_csr(2, [0], [99], [1.0])
-        with self.subTest("importance_order short tiebreak"):
-            with self.assertRaises(ValueError):
-                importance_order(np.zeros(5), np.zeros(3))
-        with self.subTest("pagerank ragged"):
-            with self.assertRaises(ValueError):
-                pagerank(3, np.array([0, 1]), np.array([1]))
-        with self.subTest("combine_edges ragged layer"):
-            with self.assertRaises(ValueError):
-                combine_edges([(np.array([0, 1]), np.array([1]), np.array([1.0]), 1.0)])
-        with self.subTest("cluster_manifest_entries ragged"):
-            with self.assertRaises(ValueError):
-                cluster_manifest_entries(
-                    np.zeros(3, np.int32), np.zeros(2), np.zeros(3), np.zeros(3, np.uint8)
-                )
+        with self.subTest("importance_order short tiebreak"), self.assertRaises(ValueError):
+            importance_order(np.zeros(5), np.zeros(3))
+        with self.subTest("pagerank ragged"), self.assertRaises(ValueError):
+            pagerank(3, np.array([0, 1]), np.array([1]))
+        with self.subTest("combine_edges ragged layer"), self.assertRaises(ValueError):
+            combine_edges([(np.array([0, 1]), np.array([1]), np.array([1.0]), 1.0)])
+        with self.subTest("cluster_manifest_entries ragged"), self.assertRaises(ValueError):
+            cluster_manifest_entries(
+                np.zeros(3, np.int32), np.zeros(2), np.zeros(3), np.zeros(3, np.uint8)
+            )
         with self.subTest("reduce_embeddings wrong basis dimension"):
             _, basis = reduce_embeddings(np.random.default_rng(0).normal(size=(20, 16)), 4)
             with self.assertRaises(ValueError):
