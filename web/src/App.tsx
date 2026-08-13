@@ -60,7 +60,7 @@ export function App() {
           powerPreference: 'high-performance',
           toneMapping: THREE.NoToneMapping,
         }}
-        camera={{ fov: 40, near: 0.01, far: 100, position: [0, 0.7, 2.6] }}
+        camera={{ fov: 40, near: 0.0001, far: 100, position: [0, 0.7, 2.6] }}
         onCreated={({ gl }) => {
           // Not quite black. Pure #000 makes the atmosphere rim look like a
           // sticker cut out and pasted on; a few points of blue give it
