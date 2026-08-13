@@ -1,0 +1,45 @@
+name: Weekly Pipeline Update
+
+on:
+  # schedule:
+  #   - cron: '0 0 * * 0' # Run at midnight every Sunday
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  update-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        working-directory: ./pipeline
+        run: uv sync
+
+      - name: Run pipeline
+        working-directory: ./pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          uv run gitglobe project
+          uv run gitglobe cluster
+          uv run gitglobe rank
+          uv run gitglobe calibrate
+          uv run gitglobe learn
+          uv run gitglobe build
+
+      # Add deployment steps for the frontend tiles here
+      # - name: Deploy tiles to Vercel
+      #   uses: amondnet/vercel-action@v20
+      #   with:
+      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
+      #     vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+      #     vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}

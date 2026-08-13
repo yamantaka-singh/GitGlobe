@@ -17,10 +17,22 @@ from qdrant_client.http.models import Filter, FieldCondition, MatchValue
 import voyageai
 from redis.asyncio import Redis
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://gitglobe:gitglobe@localhost:5433/gitglobe")
+ENV = os.getenv("ENV", "development")
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    if ENV == "production":
+        raise ValueError("DATABASE_URL is required in production")
+    DATABASE_URL = "postgresql://gitglobe:gitglobe@localhost:5433/gitglobe"
+
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY", "")
+# Trailing slashes and spaces stripped: the browser's `Origin` header never has
+# a trailing slash, so "https://app.vercel.app/" silently matches nothing and
+# every request fails CORS while the server logs look completely healthy.
+CORS_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 
 # ----------------- State -----------------
 class AppState:
@@ -35,7 +47,10 @@ state = AppState()
 async def lifespan(app: FastAPI):
     # Startup
     state.db_pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
-    state.qdrant = AsyncQdrantClient(url=QDRANT_URL)
+    if QDRANT_API_KEY:
+        state.qdrant = AsyncQdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+    else:
+        state.qdrant = AsyncQdrantClient(url=QDRANT_URL)
     state.redis = Redis.from_url(REDIS_URL, decode_responses=True)
     if VOYAGE_API_KEY:
         state.voyage_client = voyageai.AsyncClient(api_key=VOYAGE_API_KEY)
@@ -51,7 +66,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

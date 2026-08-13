@@ -1,4 +1,5 @@
 import { useGlobeStore } from '../store/useGlobeStore';
+import { API } from '../api';
 import { sceneIndex } from '../globe/Scene';
 import { repoIdentity, findGlobalIdByName } from '../repo/names';
 import { describeRank, scoresFor } from '../repo/scores';
@@ -36,7 +37,7 @@ export function RepoDetailPanel() {
     queryKey: ['repo', repoId, tileName],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
-      const res = await fetch(`http://localhost:8000/repo/${repoId}${params}`);
+      const res = await fetch(`${API}/repo/${repoId}${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
@@ -51,7 +52,7 @@ export function RepoDetailPanel() {
     queryKey: ['graph', repoId, tileName],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
-      const res = await fetch(`http://localhost:8000/graph/${repoId}${params}`);
+      const res = await fetch(`${API}/graph/${repoId}${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
