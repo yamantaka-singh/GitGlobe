@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGlobeStore } from '../store/useGlobeStore';
 import { globeCamera } from '../camera/Rig';
 import { group } from './num';
@@ -77,87 +78,120 @@ export function Intro() {
   const start = () => {
     setLeaving(true);
     void globeCamera.reset();
-    // Matches the CSS fade, so the overlay is gone by the time the camera
-    // arrives rather than lingering over a settled scene.
-    window.setTimeout(() => useGlobeStore.getState().setEntered(true), 620);
+    // Matches the exit animation duration.
+    window.setTimeout(() => useGlobeStore.getState().setEntered(true), 800);
+  };
+
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      },
+    },
+    exit: {
+      opacity: 0,
+      filter: 'blur(10px)',
+      scale: 1.05,
+      transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, y: 20, filter: 'blur(4px)' },
+    show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { type: 'spring' as const, damping: 20, stiffness: 100 } },
   };
 
   return (
-    <div className={`intro${leaving ? ' intro--leaving' : ''}`}>
-      <div className="intro__inner">
-        <p className="intro__eyebrow">↳ open source, spatially</p>
-        <h1 className="intro__headline">
-          Every repository
-          <br />
-          has neighbours.
-        </h1>
-        <p className="intro__body">
-          Nearly two hundred thousand projects placed by what they do, not what they are called. Connected by
-          dependency, weighted by PageRank, navigable by hand or by conversation.
-        </p>
+    <AnimatePresence>
+      {!leaving && (
+        <motion.div 
+          className="intro"
+          variants={container}
+          initial="hidden"
+          animate="show"
+          exit="exit"
+        >
+          <div className="intro__inner">
+            <motion.p variants={item} className="intro__eyebrow">↳ open source, spatially</motion.p>
+            <motion.h1 variants={item} className="intro__headline">
+              Every repository
+              <br />
+              has neighbours.
+            </motion.h1>
+            <motion.p variants={item} className="intro__body">
+              Nearly two hundred thousand projects placed by what they do, not what they are called. Connected by
+              dependency, weighted by PageRank, navigable by hand or by conversation.
+            </motion.p>
 
-        {loadError ? (
-          <p className="intro__error">{loadError}</p>
-        ) : (
-          <button className="intro__start" onClick={start} disabled={!ready}>
-            {ready ? '↳ Start' : '↳ Loading the world…'}
-          </button>
-        )}
+            <motion.div variants={item}>
+              {loadError ? (
+                <p className="intro__error">{loadError}</p>
+              ) : (
+                <button className="intro__start" onClick={start} disabled={!ready}>
+                  {ready ? '↳ Start' : '↳ Loading the world…'}
+                </button>
+              )}
+            </motion.div>
 
-        <dl className="intro__meta">
-          <div>
-            <dt>nodes</dt>
-            <dd>{totalPoints ? group(totalPoints) : '—'}</dd>
-          </div>
-          <div>
-            <dt>graph</dt>
-            <dd>{graphReady ? 'ready' : 'loading'}</dd>
-          </div>
-          <div>
-            <dt>layout</dt>
-            <dd>synthetic v2</dd>
-          </div>
-        </dl>
+            <motion.dl variants={item} className="intro__meta">
+              <div>
+                <dt>nodes</dt>
+                <dd>{totalPoints ? group(totalPoints) : '—'}</dd>
+              </div>
+              <div>
+                <dt>graph</dt>
+                <dd>{graphReady ? 'ready' : 'loading'}</dd>
+              </div>
+              <div>
+                <dt>layout</dt>
+                <dd>synthetic v2</dd>
+              </div>
+            </motion.dl>
 
-        <div className="intro__team">
-          <div className="intro__team-member">
-            <a href="https://github.com/ydabas-hue" target="_blank" rel="noreferrer">
-              <img src="/maki.jpg" alt="Yashasvi" className="intro__team-avatar" />
-            </a>
-            <div className="intro__team-info">
-              <div className="intro__team-name">
-                <TypewriterName firstName="Yashasvi" lastName="Dabas" />
-              </div>
-              <div className="intro__team-badges">
-                <a href="https://github.com/ydabas-hue" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="GitHub">
-                  <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" alt="GitHub" />
+            <motion.div variants={item} className="intro__team">
+              <div className="intro__team-member">
+                <a href="https://github.com/ydabas-hue" target="_blank" rel="noreferrer">
+                  <img src="/maki.jpg" alt="Yashasvi" className="intro__team-avatar" />
                 </a>
-                <a href="https://www.linkedin.com/in/yashasvi-the-boss" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="LinkedIn">
-                  <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" alt="LinkedIn" />
-                </a>
+                <div className="intro__team-info">
+                  <div className="intro__team-name">
+                    <TypewriterName firstName="Yashasvi" lastName="Dabas" />
+                  </div>
+                  <div className="intro__team-badges">
+                    <a href="https://github.com/ydabas-hue" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="GitHub">
+                      <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" alt="GitHub" />
+                    </a>
+                    <a href="https://www.linkedin.com/in/yashasvi-the-boss" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="LinkedIn">
+                      <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" alt="LinkedIn" />
+                    </a>
+                  </div>
+                </div>
               </div>
-            </div>
+              <div className="intro__team-member">
+                <a href="https://github.com/yamantaka-singh" target="_blank" rel="noreferrer">
+                  <img src="/toji.jpg" alt="Mrityunjay" className="intro__team-avatar" />
+                </a>
+                <div className="intro__team-info">
+                  <div className="intro__team-name">
+                    <TypewriterName firstName="Mrityunjay" lastName="Singh" />
+                  </div>
+                  <div className="intro__team-badges">
+                    <a href="https://github.com/yamantaka-singh" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="GitHub">
+                      <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" alt="GitHub" />
+                    </a>
+                    <a href="https://www.linkedin.com/in/yamantakasingh" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="LinkedIn">
+                      <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" alt="LinkedIn" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
-          <div className="intro__team-member">
-            <a href="https://github.com/yamantaka-singh" target="_blank" rel="noreferrer">
-              <img src="/toji.jpg" alt="Mrityunjay" className="intro__team-avatar" />
-            </a>
-            <div className="intro__team-info">
-              <div className="intro__team-name">
-                <TypewriterName firstName="Mrityunjay" lastName="Singh" />
-              </div>
-              <div className="intro__team-badges">
-                <a href="https://github.com/yamantaka-singh" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="GitHub">
-                  <img src="https://img.icons8.com/?size=100&id=4MhUS4CzoLbx&format=png" alt="GitHub" />
-                </a>
-                <a href="https://www.linkedin.com/in/yamantakasingh" target="_blank" rel="noreferrer" className="btn-icon-glossy" title="LinkedIn">
-                  <img src="https://img.icons8.com/?size=100&id=X8g2OZMx4ET5&format=png" alt="LinkedIn" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -8,6 +8,7 @@ import { degreeOf, neighboursOf, EDGE_SIMILAR_TO } from '../graph/format';
 import { globeCamera } from '../camera/Rig';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { group } from './num';
 
 function rgb(i: number) {
@@ -23,7 +24,6 @@ export function RepoDetailPanel() {
   // ---- hooks (unconditional, always in the same order) ----------------------
   const selectedId = useGlobeStore((s) => s.selectedId);
   const setSelected = useGlobeStore((s) => s.setSelected);
-  const focusArcCount = useGlobeStore((s) => s.focusArcCount);
 
   const ref = selectedId >= 0 ? sceneIndex.resolve(selectedId) : null;
   const repoId = ref?.repoId ?? 0;
@@ -136,7 +136,14 @@ export function RepoDetailPanel() {
   };
 
   return (
-    <div className="detail-panel" role="dialog" aria-label="Repository Details">
+    <motion.div 
+      className="detail-panel" 
+      role="dialog" 
+      aria-label="Repository Details"
+      initial={{ opacity: 0, y: 40, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1, transition: { type: 'spring' as const, damping: 22, stiffness: 150 } }}
+      exit={{ opacity: 0, y: 30, scale: 0.95, transition: { duration: 0.2 } }}
+    >
       <button
         className="detail-panel__close"
         onClick={() => setSelected(-1)}
@@ -218,7 +225,7 @@ export function RepoDetailPanel() {
           </button>
         </dd>
         <dt>Focus Arcs</dt>
-        <dd style={{ color: '#FFFFFF' }}>{focusArcCount}</dd>
+        <dd style={{ color: '#FFFFFF' }}><FocusArcCounter /></dd>
       </dl>
 
       <a
@@ -260,7 +267,12 @@ export function RepoDetailPanel() {
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
+}
+
+function FocusArcCounter() {
+  const focusArcCount = useGlobeStore((s) => s.focusArcCount);
+  return <>{focusArcCount}</>;
 }
 

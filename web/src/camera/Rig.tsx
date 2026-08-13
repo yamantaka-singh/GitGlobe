@@ -124,9 +124,9 @@ export function Rig({ radius }: { radius: number }) {
     const c = ref.current;
     globeCamera.controls = c;
 
-    c.minDistance = radius * 1.002; // never let the camera inside the shell
-    c.maxDistance = radius * 6;
-    c.dollySpeed = 0.6;
+    c.minDistance = radius * 1.005; // allow zooming right down to the node clusters
+    c.maxDistance = radius * 14; // allow zooming way out into deep space
+    c.dollySpeed = 0.9; // faster and more responsive zooming
     c.truckSpeed = 0;
     c.smoothTime = 0.32;
     c.draggingSmoothTime = 0.14;

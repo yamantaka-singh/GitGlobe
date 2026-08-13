@@ -214,11 +214,11 @@ export const AMBIENT_STYLE: ArcStyle = {
   color: new THREE.Color(0.85, 0.45, 0.15), // warm copper
   pulseColor: new THREE.Color(1.0, 0.85, 0.3), // gold pulse
   focusColor: new THREE.Color(1.0, 0.4, 0.4), // fiery red
-  baseAlpha: 0.052,
+  baseAlpha: 0.015,
   pulseGain: 0.36,
   pulseSpeed: 0.09,
   pulseWidth: 0.055,
-  widthPx: 3.0,
+  widthPx: 1.5,
   liftBase: 0.012,
   liftScale: 0.30,
   focusBoost: 1,

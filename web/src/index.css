@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 :root {
   /* Sampled from the reference: black space, periwinkle atmosphere, violet
@@ -29,7 +29,8 @@
   --color-ring: #0F172A;
 
   /* Editorial sans for names and headlines, mono strictly for telemetry. */
-  --sans: "Fira Sans", "Helvetica Neue", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --sans: "Space Grotesk", "Helvetica Neue", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --inter: "Inter", "Helvetica Neue", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --mono: "Fira Code", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
@@ -45,8 +46,9 @@ body,
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font: 400 13px/1.6 var(--sans);
+  font: 400 13px/1.6 var(--inter);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
@@ -118,10 +120,11 @@ button:focus-visible {
 
 .intro__headline {
   margin: 0 0 22px;
+  font-family: var(--sans);
   font-size: clamp(38px, 6.2vw, 74px);
-  font-weight: 300;
+  font-weight: 500;
   line-height: 1.03;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
 }
 
 .intro__body {
@@ -136,9 +139,13 @@ button:focus-visible {
   padding: 13px 26px;
   font-family: var(--mono);
   font-size: 13px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   border: 1px solid var(--line-strong);
-  transition: background 150ms, color 150ms;
+  transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.intro__start:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .intro__start:hover:not(:disabled) {
@@ -228,7 +235,11 @@ button:focus-visible {
   white-space: nowrap;
   color: rgba(110, 139, 232, 0.7);
   border-bottom: 1px solid transparent;
-  transition: color 130ms, border-color 130ms, text-shadow 130ms;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), text-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tabs button:active {
+  transform: scale(0.96);
 }
 
 .tabs button:hover {
@@ -265,8 +276,10 @@ button:focus-visible {
   font-family: var(--mono);
   background: var(--panel);
   border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
   pointer-events: auto;
+  transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .telemetry__bracket {
@@ -416,7 +429,9 @@ button:focus-visible {
   white-space: nowrap;
   background: var(--panel);
   border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(24px);
+  border-radius: 20px;
   pointer-events: auto;
 }
 
@@ -483,7 +498,8 @@ button:focus-visible {
   background: rgba(0, 0, 0, 0.9);
   border: 1px solid;
   border-left-width: 2px;
-  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
 }
 
 .reticle-card__name {
@@ -632,10 +648,10 @@ button:focus-visible {
   background: rgba(15, 23, 42, 0.95);
   border: 1px solid #334155;
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
   pointer-events: auto;
-  font-family: var(--sans);
+  font-family: var(--inter);
   color: #FFFFFF;
   z-index: 100;
   display: flex;
@@ -679,9 +695,11 @@ button:focus-visible {
 
 .detail-panel__title {
   margin: 0;
+  font-family: var(--sans);
   font-size: 18px;
   font-weight: 600;
   line-height: 1.2;
+  letter-spacing: -0.02em;
   color: #FFFFFF;
   word-break: break-word;
 }
@@ -767,7 +785,18 @@ button:focus-visible {
     left: 16px;
     right: 16px;
     width: auto;
+    max-height: 50vh;
+    overflow-y: auto;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: slideUp 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* ---------------------------------------------------------------- search */

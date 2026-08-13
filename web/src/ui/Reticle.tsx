@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow';
 import { useGlobeStore } from '../store/useGlobeStore';
 import { sceneIndex } from '../globe/Scene';
 import { repoIdentity } from '../repo/names';
@@ -23,7 +24,7 @@ const OFFSET = 26;
  * content for free — none of which a canvas-drawn label has.
  */
 export function Reticle() {
-  const anchor = useGlobeStore((s) => s.anchor);
+  const anchor = useGlobeStore(useShallow((s) => s.anchor));
   const hoveredId = useGlobeStore((s) => s.hoveredId);
   const selectedId = useGlobeStore((s) => s.selectedId);
 

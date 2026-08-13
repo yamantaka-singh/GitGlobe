@@ -73,7 +73,7 @@ const VERTEX_COMMON = /* glsl */ `
     vec4 mv = viewMatrix * vec4(worldPos, 1.0);
 
     // Perspective-correct: -mv.z is view-space depth.
-    p.pointSize = clamp(p.size * uSizeScale * uPixelRatio / max(-mv.z, 0.001), 1.0, 28.0);
+    p.pointSize = clamp(p.size * uSizeScale * uPixelRatio / max(-mv.z, 0.001), 1.0, 72.0);
     p.clip = projectionMatrix * mv;
     return p;
   }
@@ -182,22 +182,21 @@ export const POINTS_FRAG = /* glsl */ `
     float w  = 1.0 - r2;
     float w2 = w * w;
     float w3 = w2 * w;
-    float core = w3 * w3;   // w^6 - tight centre with no knee
-    float glow = w2;        // broad body
+    float core = w3 * w3;   // w^6 - tight pin-point centre
+    float glow = w2;        // controlled body
 
-    // Rank widens the bloom rather than drawing a boundary around it.
-    float gain = 0.34 + uHubGain * vSize;
-    float a = (core * 0.62 + glow * 0.30 * gain) * vAlpha;
+    // Tighter body so dense clusters retain their individual star nature and rich color
+    float gain = 0.2 + uHubGain * vSize * 0.5;
+    float a = (core * 0.75 + glow * 0.10 * gain) * vAlpha;
 
-    vec3 rgb = mix(vColor, vec3(1.0), core * 0.55);
+    // Retain pure, vivid domain colors without washing out the center to white
+    vec3 rgb = vColor;
 
-    // Hover stays a hard ring on purpose. It is transient, applies to exactly
-    // one node, and has to survive being surrounded by a thousand others -
-    // the discontinuity that is wrong for rank is right for a cursor.
+    // Hover stays a crisp cursor ring
     if (vHover > 0.5) {
       float r = sqrt(r2);
       float ring = smoothstep(0.58, 0.68, r) * (1.0 - smoothstep(0.84, 0.96, r));
-      rgb += ring * 1.8;
+      rgb += vec3(1.0) * ring * 1.5;
       a = max(a, ring);
     }
 
