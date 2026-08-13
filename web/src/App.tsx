@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useRef, useState, type ComponentType } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
+import { Analytics } from '@vercel/analytics/react';
 
 import { SPACE } from './globe/palette';
 
@@ -74,6 +75,7 @@ export function App() {
         {DEV && SHOW_PERF && <PerfOverlay />}
       </Canvas>
       <Hud />
+      <Analytics />
     </div>
   );
 }
