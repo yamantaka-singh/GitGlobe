@@ -637,17 +637,16 @@ class Database:
         `content_hash`, which is what makes the next run skip these rows."""
         if not vectors:
             return 0
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.executemany(
-                    """
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
                     UPDATE repo
                        SET embedding = $2, embedding_dim = $3,
                            embedded_hash = content_hash, embedded_at = now()
                      WHERE id = $1
                     """,
-                    [(rid, blob, dim) for rid, blob in vectors.items()],
-                )
+                [(rid, blob, dim) for rid, blob in vectors.items()],
+            )
         return len(vectors)
 
     async def embedded_rows(self) -> list[dict[str, Any]]:
@@ -676,18 +675,17 @@ class Database:
             (rid, theta, phi, *clusters.get(rid, (None, None)))
             for rid, (theta, phi) in positions.items()
         ]
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.executemany(
-                    """
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
                     UPDATE repo
                        SET theta = $2, phi = $3,
                            cluster_id = COALESCE($4, cluster_id),
                            domain     = COALESCE($5, domain)
                      WHERE id = $1
                     """,
-                    payload,
-                )
+                payload,
+            )
         return len(payload)
 
     async def store_star_scale(self, thresholds: list, counts: list, *,
@@ -727,10 +725,9 @@ class Database:
              json.dumps(r.components), scale_id)
             for rid, r in ranks.items()
         ]
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.executemany(
-                    """
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
                     INSERT INTO repo_global_rank
                         (repo_id, score, star_rank, star_percentile, components,
                          scale_id, computed_at)
@@ -743,8 +740,8 @@ class Database:
                         scale_id = EXCLUDED.scale_id,
                         computed_at = EXCLUDED.computed_at
                     """,
-                    payload,
-                )
+                payload,
+            )
         return len(payload)
 
     async def global_ranks(self) -> dict[int, float]:
@@ -756,15 +753,14 @@ class Database:
     async def store_ranks(self, ranks: dict[int, float]) -> int:
         if not ranks:
             return 0
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.executemany(
-                    """
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
                     INSERT INTO repo_relatedness (repo_id, rank) VALUES ($1, $2)
                     ON CONFLICT (repo_id) DO UPDATE SET rank = EXCLUDED.rank
                     """,
-                    list(ranks.items()),
-                )
+                list(ranks.items()),
+            )
         return len(ranks)
 
     async def replace_similar_edges(self, edges: list[tuple[int, int, float]]) -> int:
@@ -773,16 +769,29 @@ class Database:
         Deleted first because kNN edges are entirely derived: a re-projection
         invalidates all of them at once, and leaving the old ones would union
         two different maps' notions of similarity.
+
+        **An empty list does not truncate.** "Replace with nothing" and "the
+        producer returned nothing" are indistinguishable at this boundary, and
+        only one of them is ever intended. UMAP's subsample path stopped
+        populating its kNN graph, `knn_to_edges` correctly returned `[]`, and
+        this method deleted 237,538 edges and logged `Stored 0` — one line,
+        no error, and the alternatives feature gone. Refuse instead.
         """
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute("DELETE FROM edge WHERE kind = 1")
-                if edges:
-                    await conn.executemany(
-                        "INSERT INTO edge (src, dst, kind, weight) VALUES ($1, $2, 1, $3) "
-                        "ON CONFLICT (src, dst, kind) DO UPDATE SET weight = EXCLUDED.weight",
-                        edges,
-                    )
+        if not edges:
+            raise ValueError(
+                "replace_similar_edges got zero edges, which would delete the "
+                "entire similar_to layer. If the projection genuinely has no "
+                "kNN graph, that is the bug — fix it upstream rather than "
+                "letting an empty result truncate a working layer."
+            )
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute("DELETE FROM edge WHERE kind = 1")
+            if edges:
+                await conn.executemany(
+                    "INSERT INTO edge (src, dst, kind, weight) VALUES ($1, $2, 1, $3) "
+                    "ON CONFLICT (src, dst, kind) DO UPDATE SET weight = EXCLUDED.weight",
+                    edges,
+                )
         return len(edges)
 
     async def relatedness_edges(self) -> list[tuple[int, int, float, int]]:
@@ -844,10 +853,9 @@ class Database:
     async def store_clusters(self, entries: list[dict[str, Any]]) -> int:
         if not entries:
             return 0
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.executemany(
-                    """
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(
+                """
                     INSERT INTO cluster (id, label, domain, size, theta, phi)
                     VALUES ($1, $2, $3, $4, $5, $6)
                     ON CONFLICT (id) DO UPDATE SET
@@ -855,12 +863,12 @@ class Database:
                         size  = EXCLUDED.size,  theta  = EXCLUDED.theta,
                         phi   = EXCLUDED.phi
                     """,
-                    [
-                        (e["id"], e.get("label"), e.get("domain"), e.get("size", 0),
-                         e.get("theta"), e.get("phi"))
-                        for e in entries
-                    ],
-                )
+                [
+                    (e["id"], e.get("label"), e.get("domain"), e.get("size", 0),
+                     e.get("theta"), e.get("phi"))
+                    for e in entries
+                ],
+            )
         return len(entries)
 
     async def start_projection_run(self, **fields) -> int:

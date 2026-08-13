@@ -34,9 +34,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gitglobe.db import Database  # noqa: E402
-from gitglobe.rank.global_scale import StarScale  # noqa: E402
-from gitglobe.settings import Settings  # noqa: E402
+from gitglobe.db import Database
+from gitglobe.rank.global_scale import StarScale
+from gitglobe.settings import Settings
 
 #: Where the piecewise ruler hands over from log to linear, and how much of the
 #: output range it reserves for everything above that. 0.60 means the top 40% of

@@ -43,7 +43,7 @@ DEFAULT_LOCATION = "us-central1"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
 
-DEFAULT_CONCURRENCY = 16
+DEFAULT_CONCURRENCY = 8
 
 #: Workers for NIM. Sized as rate x latency: 40 requests/minute against ~90s
 #: per call needs ~60 in flight to keep the limiter, rather than idle workers,
@@ -376,10 +376,11 @@ class Teacher:
         lock = asyncio.Lock()
 
         async def worker(repo: dict) -> None:
+            assert repo.get("id") is not None, "Repository payload missing ID"
             try:
                 async with semaphore:
                     scores = await self.rate_one(repo)
-            except Exception as exc:  # noqa: BLE001 - one row must not end the run
+            except Exception as exc:
                 # `rate_one` calls `assert_no_popularity`, which RAISES by
                 # design. Uncontained, one repository would cancel every other
                 # in-flight worker and discard the unpersisted batch — an hour

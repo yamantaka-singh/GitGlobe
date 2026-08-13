@@ -24,11 +24,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gitglobe.brain.rubric import (  # noqa: E402
+from gitglobe.brain.rubric import (
     assert_no_popularity,
     build_teacher_prompt,
 )
-from gitglobe.brain.sampling import plan_teaching  # noqa: E402
+from gitglobe.brain.sampling import plan_teaching
 
 
 def rows(n: int = 600) -> list[dict]:

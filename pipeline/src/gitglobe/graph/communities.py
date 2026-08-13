@@ -308,7 +308,7 @@ def detect(
     offsets, targets, weights = build_adjacency(n, src, dst, weight)
     if len(targets) == 0:
         # No edges: every node is its own community, and modularity is 0.
-        return CommunityResult(np.arange(n), 0.0, 0, {i: 1 for i in range(n)})
+        return CommunityResult(np.arange(n), 0.0, 0, dict.fromkeys(range(n), 1))
 
     rng = np.random.default_rng(seed)
     node_labels = np.arange(n)

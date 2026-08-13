@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gitglobe.rank.criticality import (  # noqa: E402
+from gitglobe.rank.criticality import (
     DUMP_MEASURED_AT,
     DUMP_URL,
     match_corpus,

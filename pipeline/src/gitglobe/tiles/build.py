@@ -365,8 +365,8 @@ def build_world(
     graph_meta = {
         "file": "graph.bin",
         "bytes": len(blob),
-        "directedEdges": int(len(src)),
-        "csrEntries": int(len(targets)),
+        "directedEdges": len(src),
+        "csrEntries": len(targets),
         "ambientArcs": int(len(ambient) // 2),
         "pagerank": {
             "damping": DEFAULT_DAMPING,

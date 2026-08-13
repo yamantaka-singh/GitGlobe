@@ -20,12 +20,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.embed import whiten  # noqa: E402
-from gitglobe.graph.communities import build_adjacency  # noqa: E402
-from gitglobe.graph.stability import MAX_SUBSTEP, stability  # noqa: E402
-from gitglobe.project.cluster import cluster_purity  # noqa: E402
+from gitglobe.embed import whiten
+from gitglobe.graph.communities import build_adjacency
+from gitglobe.graph.stability import MAX_SUBSTEP, stability
+from gitglobe.project.cluster import cluster_purity
 
 
 def coned_embeddings(baseline=0.6473, cluster=0.0652, D=256, K=40, N=6_000, seed=0):

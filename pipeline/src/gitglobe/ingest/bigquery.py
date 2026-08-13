@@ -413,7 +413,7 @@ class BigQueryExtractor:
                 "ORDER BY size_bytes DESC",
                 [],
             )
-        except Exception as exc:  # noqa: BLE001 - fall back, never fatal
+        except Exception as exc:
             log.warning("__TABLES__ unavailable (%s); trying INFORMATION_SCHEMA", exc)
             return self._run_raw(
                 f"SELECT table_name AS table_id, NULL AS row_count, NULL AS size_bytes "

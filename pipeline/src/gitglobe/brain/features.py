@@ -30,7 +30,6 @@ would score well by recomputing stars and we would have learned nothing —
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 

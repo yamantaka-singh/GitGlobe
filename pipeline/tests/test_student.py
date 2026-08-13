@@ -15,10 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.brain import student as st  # noqa: E402
-from gitglobe.brain.rubric import DIMENSION_KEYS  # noqa: E402
+from gitglobe.brain import student as st
+from gitglobe.brain.rubric import DIMENSION_KEYS
 
 
 def learnable(n=1200, d=24, noise=6.0, seed=0):
@@ -155,9 +155,8 @@ class TestTreeShape(unittest.TestCase):
 class TestBlindfold(unittest.TestCase):
     def test_popularity_features_are_refused(self) -> None:
         for bad in ("stars", "log_stars", "forks", "pagerank", "stars_90d", "trending"):
-            with self.subTest(feature=bad):
-                with self.assertRaises(ValueError):
-                    st.assert_no_popularity_features(["days_since_push", bad])
+            with self.subTest(feature=bad), self.assertRaises(ValueError):
+                st.assert_no_popularity_features(["days_since_push", bad])
 
     def test_innocent_features_pass(self) -> None:
         st.assert_no_popularity_features(

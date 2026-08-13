@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from .calibrate import GlobalRank, RepoSignals, composite_score
+from .calibrate import RepoSignals, composite_score
 from .global_scale import StarScale, Weights
 
 log = logging.getLogger(__name__)

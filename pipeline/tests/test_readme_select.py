@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gitglobe.ingest.readme_select import (  # noqa: E402
+from gitglobe.ingest.readme_select import (
     SYMLINK_MODE,
     looks_like_symlink_content,
     readme_names_in_tree,

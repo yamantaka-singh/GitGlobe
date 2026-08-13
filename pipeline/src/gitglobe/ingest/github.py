@@ -25,7 +25,7 @@ import logging
 import os
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Iterable
 
@@ -266,7 +266,7 @@ class GitHubIngest:
             return await self._post(query, variables, attempt=attempt + 1)
 
         response.raise_for_status()
-        
+
         try:
             payload = response.json()
         except json.JSONDecodeError as exc:
@@ -278,7 +278,7 @@ class GitHubIngest:
         # Recover the page size gradually. Jumping straight back to the full
         # size after one success just re-triggers the failure.
         self._consecutive_ok += 1
-        if self._consecutive_ok >= 20 and self.page_size < DEFAULT_PAGE_SIZE:
+        if self._consecutive_ok >= 5 and self.page_size < DEFAULT_PAGE_SIZE:
             self.page_size = min(DEFAULT_PAGE_SIZE, self.page_size * 2)
             self._consecutive_ok = 0
             log.info("Recovered — page size up to %d", self.page_size)
@@ -310,7 +310,7 @@ class GitHubIngest:
         jittered keeps the delay meaningful while still de-synchronising
         concurrent workers.
         """
-        base = min(90.0, 2.0 ** (attempt + 1))
+        base = min(15.0, 2.0 ** (attempt + 1))
         delay = base * (0.5 + 0.5 * random.random())
         log.warning("Retry %d in %.1fs (%s)", attempt + 1, delay, reason)
         await asyncio.sleep(delay)
@@ -371,7 +371,7 @@ class GitHubIngest:
             aliased = [(f"r{i}", full_name, path) for i, (full_name, path) in enumerate(chunk)]
             try:
                 data = await self._post(build_backfill_query(aliased), {})
-            except Exception as exc:  # noqa: BLE001 - backfill is best-effort
+            except Exception as exc:
                 log.warning("README backfill batch failed (%s) — continuing", exc)
                 continue
             for alias, full_name, _path in aliased:

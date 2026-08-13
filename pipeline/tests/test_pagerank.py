@@ -18,9 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from gitglobe.graph.pagerank import (  # noqa: E402
+from gitglobe.graph.pagerank import (
     banded_display_size,
     combine_edges,
     importance_order,
