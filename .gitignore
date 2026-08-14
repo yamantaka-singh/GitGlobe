@@ -1,13 +1,36 @@
+# OS
 .DS_Store
 *.DS_Store
+
+# Dependencies & build output
 node_modules/
 dist/
+.venv/
 __pycache__/
 *.pyc
+
+# Secrets & local env
 .env
+.env.*
+!.env.example
+
+# Local databases and dumps.
+# NOTE: this is deliberately not `*.sql` — pipeline/migrations/*.sql are real
+# source files that must be committed. A blanket `*.sql` silently swallowed
+# every new migration.
 *.db
 *.sqlite
-.agents/
-*.sql
-.venv/
+*_backup*.sql
+*.dump
+
+# Logs
 *.log
+
+# Agent/editor tooling (machine-local, contains absolute paths)
+.agents/
+
+# Local scratch — one-off inspection scripts, not part of the build
+check_*.js
+test-rotate.js
+data_pipeline.py
+repos_spatial.json
