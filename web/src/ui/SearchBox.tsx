@@ -63,11 +63,13 @@ export function SearchBox() {
       const rawData = await res.json();
       const mapped: SearchResult[] = rawData.map((item: any) => {
         const repo = item.repo;
-        const [org, name] = repo.full_name.split('/');
+        const parts = (repo.full_name || '').split('/');
+        const org = parts.length > 1 ? parts[0] : '';
+        const name = parts.length > 1 ? parts[1] : (repo.full_name || '');
         const globalId = findGlobalIdByName(repo.full_name);
         
         return {
-          id: globalId,
+          id: globalId >= 0 ? globalId : repo.id,
           name,
           org,
           domain: repo.domain,
@@ -75,11 +77,7 @@ export function SearchBox() {
           score: item.score
         };
       });
-      // The `limit` query param above is ignored by the API — /search takes only
-      // `q` — so this comes back with up to 50 rows and the dropdown rendered a
-      // 44-item scroll list instead of the 5 the call asks for. Enforce it here;
-      // the real fix is a `limit` param on the endpoint.
-      return mapped.filter((r) => r.id >= 0).slice(0, 5);
+      return mapped.slice(0, 6);
     },
     enabled: debouncedQuery.trim().length > 0,
   });
