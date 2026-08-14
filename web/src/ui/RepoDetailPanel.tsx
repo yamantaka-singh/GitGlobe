@@ -26,7 +26,7 @@ export function RepoDetailPanel() {
   const setSelected = useGlobeStore((s) => s.setSelected);
 
   const ref = selectedId >= 0 ? sceneIndex.resolve(selectedId) : null;
-  const repoId = ref?.repoId ?? 0;
+  const repoId = ref?.repoId ?? (selectedId >= 0 ? selectedId + 1 : 0);
   const domain = ref?.domain ?? 0;
   // Get the name from the tile names file — needed for GitHub API fallback
   const tileName = ref ? repoIdentity(repoId, domain).fullName : '';
@@ -34,14 +34,14 @@ export function RepoDetailPanel() {
   // Fetch real metadata from the API. Pass the repo name so the backend can
   // fall back to GitHub's public API for repos not in our database.
   const { data, isLoading } = useQuery({
-    queryKey: ['repo', repoId, tileName],
+    queryKey: ['repo', repoId, tileName, selectedId],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
       const res = await fetch(`${API}/repo/${repoId}${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    enabled: !!ref && repoId > 0,
+    enabled: selectedId >= 0 && repoId > 0,
     retry: false,
     staleTime: 5 * 60_000,
   });
@@ -49,14 +49,14 @@ export function RepoDetailPanel() {
   const [showList, setShowList] = useState<'dependents' | 'dependencies' | 'alternatives' | null>(null);
 
   const { data: graphData, isLoading: isGraphLoading } = useQuery({
-    queryKey: ['graph', repoId, tileName],
+    queryKey: ['graph', repoId, tileName, selectedId],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
       const res = await fetch(`${API}/graph/${repoId}${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    enabled: !!ref && repoId > 0 && showList !== null,
+    enabled: selectedId >= 0 && repoId > 0 && showList !== null,
     retry: false,
     staleTime: 5 * 60_000,
   });
@@ -66,7 +66,7 @@ export function RepoDetailPanel() {
   }, [selectedId]);
 
   // ---- early exits (after all hooks) ----------------------------------------
-  if (!ref || selectedId < 0) return null;
+  if (selectedId < 0) return null;
 
   // ---- derive display values ------------------------------------------------
   // Prefer the API's full_name (real GitHub name) over the procedural generator.
