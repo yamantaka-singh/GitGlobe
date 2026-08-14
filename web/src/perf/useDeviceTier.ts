@@ -6,10 +6,10 @@ import { useGlobeStore, type Tier } from '../store/useGlobeStore';
 /**
  * Device tiering, per web3d-performance-budget.
  *
- * Static detection gets us a starting guess; measured demotion is what actually
- * works, because a laptop that renders the first second fine can still collapse
- * once the GPU warms up. We watch the first ~2 seconds of real frame times and
- * demote if the device can't hold the budget.
+ * Static detection picks the starting budget once, and nothing lowers it at
+ * runtime — see the note at the bottom of this file for why the frame-time
+ * sampler that used to live here was removed rather than tuned. Runtime quality
+ * is governed by pixel ratio in `Scene`, which never costs the user any data.
  */
 export function TIER_BUDGET(tier: Tier) {
   return {
@@ -38,27 +38,38 @@ export function detectTier(gl: THREE.WebGLRenderer): Tier {
   if (/Apple (M\d|GPU)/i.test(renderer) && !mobile) return 'high';
   if (/(SwiftShader|llvmpipe|Software)/i.test(renderer)) return 'low';
   if (mobile && mem <= 3) return 'low';
-  // Every phone used to be pinned to `mid`, which caps loading at band 1 — a
-  // third of the corpus (39,747 of 198,731 nodes). A current phone renders the
-  // full set fine, and the whole point of the measured demotion below is that a
-  // static guess is not trustworthy. So start high and let real frame times
-  // decide. The `cores <= 4` rule that used to force `low` here is gone too: iOS
-  // under-reports hardwareConcurrency, so it was demoting exactly the devices
+  // Phones get the full corpus. They used to be pinned to `mid`, which caps
+  // loading at band 1 — 39,747 of 198,731 nodes. All bands are one draw call
+  // each, so the extra points cost geometry bandwidth once at load, not frame
+  // time; what actually costs frame time is fragments, and the DPR governor
+  // owns that. The `cores <= 4` rule that used to force `low` is gone as well:
+  // iOS under-reports hardwareConcurrency, so it demoted exactly the devices
   // most able to cope.
-  // ponytail: optimistic start, measured demotion is the safety net. If a slow
-  // phone visibly churns through band 2 before demoting, gate on `mem >= 6`.
+  // ponytail: no runtime downgrade path at all. If a genuinely weak phone is
+  // observed struggling at the lowest DPR, gate this on `mem >= 6`.
   if (mobile) return 'high';
   if (cores <= 4 || mem <= 4) return 'mid';
   return 'high';
 }
 
+/**
+ * One decision per page load, not one per effect run.
+ *
+ * `setTier(initial)` used to run on every invocation of the effect below, which
+ * meant any remount reset the tier to its optimistic starting value and kicked
+ * off a fresh 158k-point band load. Module scope rather than a ref: the point is
+ * to survive a remount, which is exactly what a ref does not do.
+ */
+let tierDecided = false;
+
 export function useDeviceTier() {
   const gl = useThree((s) => s.gl);
   const setTier = useGlobeStore((s) => s.setTier);
-
   useEffect(() => {
-    const initial = detectTier(gl);
-    setTier(initial);
+    if (!tierDecided) {
+      tierDecided = true;
+      setTier(detectTier(gl));
+    }
 
     // Honour the OS accessibility setting before we start spinning anything.
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -69,31 +80,36 @@ export function useDeviceTier() {
     applyMotion();
     mq.addEventListener('change', applyMotion);
 
-    // Measured demotion: sample frame times for 2s, then decide.
-    const samples: number[] = [];
-    let last = performance.now();
-    let raf = 0;
-    const tick = () => {
-      const now = performance.now();
-      samples.push(now - last);
-      last = now;
-      if (samples.length < 140) {
-        raf = requestAnimationFrame(tick);
-        return;
-      }
-      // Ignore the first 40 frames — shader compilation and tile upload happen
-      // there and would demote every device.
-      const warm = samples.slice(40).sort((a, b) => a - b);
-      const p95 = warm[Math.floor(warm.length * 0.95)] ?? 0;
-      const current = useGlobeStore.getState().tier;
-      if (p95 > 34 && current !== 'low') useGlobeStore.getState().setTier('low');
-      else if (p95 > 21 && current === 'high') useGlobeStore.getState().setTier('mid');
-    };
-    raf = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      mq.removeEventListener('change', applyMotion);
-    };
+    return () => mq.removeEventListener('change', applyMotion);
   }, [gl, setTier]);
 }
+
+/**
+ * Why there is no longer a measured demotion here.
+ *
+ * There used to be a frame-time sampler that dropped the tier when it saw a bad
+ * p95. It was removed rather than tuned, because both halves of it were wrong:
+ *
+ *  - **The measurement could not be trusted.** It sampled `requestAnimationFrame`
+ *    deltas, and a browser throttles rAF to roughly 1fps in a background tab —
+ *    so backgrounding the page, or switching apps on a phone, produced 1000ms
+ *    "frames" and demoted instantly. That is the reported "nodes keep dropping":
+ *    it fired on a 10-core desktop with 16GB purely because the tab was not in
+ *    front. Its earlier window also covered the 158,984-point upload, measuring
+ *    the load instead of the steady state.
+ *
+ *  - **The remedy was worse than the problem.** Demotion lowers `maxBand`, which
+ *    unloads LOD bands — 198,731 nodes collapsing to 39,747 or 3,975. Throwing
+ *    away 80–98% of the corpus is the most destructive possible response to one
+ *    slow frame, and it is the thing users actually notice.
+ *
+ * Runtime quality is now handled entirely by the DPR governor in `Scene`
+ * (drei's `PerformanceMonitor` driving `dprScale`). That is the correct lever:
+ * this scene is fragment-bound, not geometry-bound — all bands are one draw
+ * call each, while zooming in multiplies shaded pixels per point. Pixel ratio
+ * is quadratic in fragment cost, recovers automatically when load drops, and
+ * costs a little sharpness instead of most of the data.
+ *
+ * `detectTier` still runs once for the *starting* DPR cap and ambient-arc
+ * budget. It is static, so a throttled tab cannot corrupt it.
+ */

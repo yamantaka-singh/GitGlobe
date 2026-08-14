@@ -93,7 +93,22 @@ button:focus-visible {
   inset: 0;
   display: flex;
   align-items: center;
-  padding: 0 clamp(24px, 7vw, 120px);
+  /* `body` is `overflow: hidden` (the globe must not scroll), so this panel is
+     the only thing that can scroll — and it did not. Centred content taller
+     than the viewport overflowed equally off both ends with no way to reach it,
+     which is why the team row and its GitHub/LinkedIn links were cut off the
+     bottom on phones and short laptop windows.
+
+     `auto` margins on the inner block keep the centred look while letting the
+     box grow past the viewport, which plain `align-items: center` will not do:
+     a centred flex item overflowing its container is unreachable in the start
+     direction. Safe-area padding keeps the last row clear of the iOS home
+     indicator. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: max(24px, env(safe-area-inset-top)) clamp(24px, 7vw, 120px)
+    max(24px, env(safe-area-inset-bottom));
   background: linear-gradient(100deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.72) 46%, rgba(0, 0, 0, 0) 78%);
   pointer-events: auto;
   transition: opacity 600ms ease, transform 600ms ease;
@@ -107,6 +122,9 @@ button:focus-visible {
 
 .intro__inner {
   max-width: 560px;
+  /* Keeps the vertical centring on tall screens, but lets the block start at
+     the top and scroll once it is taller than the viewport. */
+  margin: auto 0;
   /* A flex item defaults to `min-width: auto`, which refuses to shrink below
      the widest thing inside it. The team row is 467px of unwrappable avatars,
      so on a 375px phone the whole intro was pinned at 467px and every line of
@@ -140,22 +158,36 @@ button:focus-visible {
   color: var(--muted);
 }
 
+/* Same palette, better button. It was a hairline rectangle with no fill, which
+   at full width on a phone reads as an empty box rather than the primary
+   action. Rounded, given a faint fill drawn from the existing periwinkle, and
+   lifted on hover — no new colours introduced. */
 .intro__start {
-  padding: 13px 26px;
+  padding: 14px 28px;
   font-family: var(--mono);
   font-size: 13px;
   letter-spacing: 0.08em;
   border: 1px solid var(--line-strong);
-  transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1), color 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(110, 139, 232, 0.14), rgba(110, 139, 232, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .intro__start:active:not(:disabled) {
   transform: scale(0.98);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .intro__start:hover:not(:disabled) {
   color: #000;
   background: var(--cyan);
+  border-color: var(--cyan);
+  box-shadow: 0 6px 22px rgba(110, 139, 232, 0.32);
 }
 
 .intro__start:disabled {
@@ -258,16 +290,32 @@ button:focus-visible {
   text-shadow: 0 0 10px rgba(110, 139, 232, 0.8);
 }
 
+/* Reads as a control rather than stray text, and gets a real 44px touch target
+   on phones without changing where it sits. */
 .topbar__toggle {
   flex: none;
+  padding: 8px 12px;
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.05em;
   color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    background 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .topbar__toggle:hover {
   color: var(--cyan);
+  background: rgba(110, 139, 232, 0.08);
+  border-color: var(--line);
+}
+
+.topbar__toggle[aria-pressed='true'] {
+  color: var(--text);
+  background: rgba(110, 139, 232, 0.12);
+  border-color: var(--line);
 }
 
 /* ---------------------------------------------------------------- telemetry */
@@ -613,6 +661,11 @@ button:focus-visible {
     background: linear-gradient(180deg, rgba(2, 2, 4, 0.94) 0%, rgba(2, 2, 4, 0.7) 62%, rgba(2, 2, 4, 0) 100%);
     align-items: flex-start;
     padding-top: 13vh;
+  }
+  /* Auto margins beat `align-items`, so the centring trick has to be switched
+     off here or it would undo the top-aligned mobile framing above. */
+  .intro__inner {
+    margin: 0;
   }
   .intro__meta {
     gap: 26px;

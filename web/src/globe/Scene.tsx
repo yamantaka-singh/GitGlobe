@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
+// Narrow import: drei is large and its barrel file pulls in far more than this.
+import { PerformanceMonitor } from '@react-three/drei/core/PerformanceMonitor';
 
 import { Nebula, Planet, Starfield } from './Backdrop';
 import { usePlanetTexture } from './usePlanetTexture';
@@ -292,13 +294,34 @@ export function Scene() {
     };
   }, [gl]);
 
+  // Fill rate is the thing that actually moves under load here. Points are sized
+  // in screen space, so zooming in multiplies the shaded pixels per point while
+  // the geometry cost stays flat — the scene goes fragment-bound and the frame
+  // rate falls even though nothing was added. Scaling the pixel ratio is the
+  // cheapest lever (quadratic in fragments) and, unlike dropping a tier, it
+  // costs a little sharpness rather than 155,000 repositories.
   const dprCap = useMemo(() => TIER_BUDGET(tier).dprCap, [tier]);
+  const dprScale = useGlobeStore((s) => s.dprScale);
   useEffect(() => {
-    gl.setPixelRatio(Math.min(window.devicePixelRatio, dprCap));
-  }, [gl, dprCap]);
+    gl.setPixelRatio(Math.min(window.devicePixelRatio, dprCap) * dprScale);
+  }, [gl, dprCap, dprScale]);
 
   return (
     <>
+      {/* Continuous fill-rate governor. Measures real frame rate against the
+          display's refresh and walks the pixel ratio down when the scene can't
+          keep up — which is what zooming in causes — then back up when it can.
+          Bounded at 0.55 so the globe never turns to mush, and it never touches
+          the node count: the corpus stays whole at every quality level. */}
+      <PerformanceMonitor
+        factor={1}
+        step={0.12}
+        bounds={(refreshRate) => (refreshRate > 90 ? [55, 85] : [45, 58])}
+        onChange={({ factor }) =>
+          useGlobeStore.getState().setDprScale(0.55 + 0.45 * factor)
+        }
+      />
+
       {/* STATIC — never changes */}
       <Nebula />
       <Starfield />

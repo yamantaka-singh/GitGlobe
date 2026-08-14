@@ -49,6 +49,13 @@ interface GlobeState {
 
   // --- rendering knobs ---
   tier: Tier;
+  /**
+   * Continuous fill-rate release valve, 0.55–1, multiplied into the tier's DPR
+   * cap. Zooming in makes every point cover far more pixels, and the scene is
+   * fragment-bound long before it is geometry-bound — so this is the lever that
+   * should move under load, not the node count.
+   */
+  dprScale: number;
   sizeScale: number;
   autoRotate: boolean;
   reducedMotion: boolean;
@@ -73,6 +80,7 @@ interface GlobeState {
   setCameraBusy: (busy: boolean) => void;
   setAnchor: (anchor: ScreenAnchor) => void;
   setTier: (tier: Tier) => void;
+  setDprScale: (dprScale: number) => void;
   setSizeScale: (scale: number) => void;
   setAutoRotate: (on: boolean) => void;
   setReducedMotion: (on: boolean) => void;
@@ -99,6 +107,7 @@ export const useGlobeStore = create<GlobeState>((set) => ({
   anchor: { x: 0, y: 0, visible: false },
 
   tier: 'high',
+  dprScale: 1,
   sizeScale: 18,
   autoRotate: true,
   reducedMotion: false,
@@ -130,6 +139,10 @@ export const useGlobeStore = create<GlobeState>((set) => ({
         : { anchor },
     ),
   setTier: (tier) => set({ tier }),
+  // Guarded: PerformanceMonitor fires often and an identical value would wake
+  // every subscriber and re-run the pixel-ratio effect for nothing.
+  setDprScale: (dprScale) =>
+    set((s) => (Math.abs(s.dprScale - dprScale) < 0.01 ? s : { dprScale })),
   setSizeScale: (sizeScale) => set({ sizeScale }),
   setAutoRotate: (autoRotate) => set({ autoRotate }),
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
