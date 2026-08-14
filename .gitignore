@@ -28,6 +28,7 @@ __pycache__/
 
 # Agent/editor tooling (machine-local, contains absolute paths)
 .agents/
+.claude/
 
 # Local scratch — one-off inspection scripts, not part of the build
 check_*.js

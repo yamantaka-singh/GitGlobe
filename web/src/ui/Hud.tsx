@@ -140,12 +140,18 @@ function CursorReadout() {
 
   if (selectedId !== -1) return null;
 
+  // Two hints, one per input model, switched in CSS on `(hover: none)`. A phone
+  // has no scroll wheel and no hover, so the desktop copy was instructing touch
+  // users to do two things their device cannot do.
   return (
     <div className="readout">
       {hoveredId >= 0 ? (
         <span className="muted">↳ click to pin this node and hold its connections</span>
       ) : (
-        <span className="muted">↳ drag to orbit · scroll to zoom · hover a node</span>
+        <>
+          <span className="muted readout__pointer">↳ drag to orbit · scroll to zoom · hover a node</span>
+          <span className="muted readout__touch">↳ drag to orbit · pinch to zoom · tap a node</span>
+        </>
       )}
     </div>
   );

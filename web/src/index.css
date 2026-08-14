@@ -107,6 +107,11 @@ button:focus-visible {
 
 .intro__inner {
   max-width: 560px;
+  /* A flex item defaults to `min-width: auto`, which refuses to shrink below
+     the widest thing inside it. The team row is 467px of unwrappable avatars,
+     so on a 375px phone the whole intro was pinned at 467px and every line of
+     copy was clipped mid-word. `max-width` alone cannot undo that. */
+  min-width: 0;
 }
 
 .intro__eyebrow {
@@ -435,6 +440,22 @@ button:focus-visible {
   pointer-events: auto;
 }
 
+/* Input-model hints: show the pointer copy by default, swap to the touch copy
+   on devices with no hover. Coarse-pointer devices get the touch wording even
+   at tablet widths, which a width breakpoint alone would miss. */
+.readout__touch {
+  display: none;
+}
+
+@media (hover: none) {
+  .readout__pointer {
+    display: none;
+  }
+  .readout__touch {
+    display: inline;
+  }
+}
+
 .readout i {
   width: 6px;
   height: 6px;
@@ -600,11 +621,31 @@ button:focus-visible {
 /* Phone: touch targets get bigger, the reticle card is already gone, and the
    headline has to stop competing with the globe for vertical space. */
 @media (max-width: 560px) {
+  /* One row cannot hold a 200px search field, the stats toggle, and ten domain
+     tabs in 375px. Flexed onto one line the tabs were crushed to 53px holding
+     1371px of content — a scroll strip too narrow to read a single label. So
+     wrap: controls on the first row, the domain strip full-width on the
+     second, where its horizontal scroll is actually usable. */
   .topbar {
-    padding: 12px 14px;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
+  .topbar__toggle {
+    order: 1;
+    flex: none;
+  }
+  .tabs {
+    order: 2;
+    flex: 1 0 100%;
+    /* Momentum scrolling, and don't let a horizontal swipe on the strip get
+       stolen by the globe's rotate gesture underneath. */
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+  }
+  /* 44px minimum touch targets — the desktop paddings land around 28px. */
   .tabs button {
-    padding: 8px 10px;
+    padding: 10px 12px;
   }
   .intro__headline {
     font-size: clamp(30px, 10vw, 44px);
@@ -878,6 +919,7 @@ button:focus-visible {
 .intro__team {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 32px;
   margin-top: 48px;
   padding-top: 32px;
@@ -973,4 +1015,70 @@ button:focus-visible {
 
 .btn-icon-glossy:active img {
   transform: translateY(0) scale(0.94);
+}
+
+/* Phone overrides for everything defined *below* the main responsive block.
+   These live at the end of the file on purpose: `.search-box__input`,
+   `.detail-panel__close` and `.intro__team-avatar` are all declared further
+   down than the `@media (max-width: 560px)` section above, so an override
+   placed up there loses to the base rule on equal specificity and silently
+   does nothing. Same breakpoint, different position in the cascade. */
+@media (max-width: 560px) {
+  /* The search field is width-driven at desktop sizes (200px, 280px on focus).
+     On a phone it has to be the flex item that absorbs the leftover space
+     instead, or the focus animation shoves the stats toggle off-screen. */
+  .search-box {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .search-box__input,
+  .search-box__input:focus {
+    width: 100%;
+  }
+  /* Anchored to the viewport rather than the input, so a 280px dropdown can't
+     hang off the right edge of a 375px screen. */
+  .search-box__results {
+    position: fixed;
+    left: 14px;
+    right: 14px;
+    width: auto;
+    max-height: 46vh;
+  }
+  /* Result rows land at 41px with the desktop padding — just under the 44px
+     touch minimum, which is exactly the size that produces mis-taps. */
+  .search-box__list button {
+    padding: 13px 12px;
+  }
+  .detail-panel__close {
+    width: 44px;
+    height: 44px;
+    top: 6px;
+    right: 6px;
+  }
+  .intro__team {
+    gap: 18px;
+    margin-top: 32px;
+    padding-top: 22px;
+  }
+  .intro__team-member {
+    flex: 1 1 100%;
+  }
+  .intro__team-avatar {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* Short viewports — phones in landscape, where height is the scarce axis.
+   The base dropdown is 320px tall, which overflows a 375px-high window once
+   the topbar is accounted for. Also placed after `.search-box__results` so it
+   actually wins. */
+@media (max-height: 520px) {
+  .search-box__results {
+    max-height: 60vh;
+  }
+  .detail-panel {
+    max-height: 74vh;
+  }
 }
