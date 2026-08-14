@@ -914,7 +914,10 @@ button:focus-visible {
   transition: background 150ms;
 }
 
-.search-box__list button:hover {
+/* Keyboard highlight reuses the hover fill exactly — arrowing through the list
+   should look identical to hovering it, not introduce a second visual state. */
+.search-box__list button:hover,
+.search-box__list button.is-active {
   background: var(--color-secondary);
 }
 
@@ -1094,4 +1097,41 @@ button:focus-visible {
   .detail-panel {
     max-height: 74vh;
   }
+}
+
+/* Failure surfaces: shown only when WebGL is unavailable or the GL context has
+   been dropped. Deliberately plain and token-driven — it never appears in a
+   healthy session, so it carries no design weight. */
+.app__fallback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(46ch, calc(100vw - 32px));
+  padding: 24px 28px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(24px);
+  pointer-events: auto;
+  z-index: 200;
+}
+
+.app__fallback h1 {
+  margin: 0 0 12px;
+  font-family: var(--sans);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.app__fallback p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.app__fallback p:last-child {
+  margin-bottom: 0;
 }

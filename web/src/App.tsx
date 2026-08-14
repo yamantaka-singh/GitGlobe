@@ -27,9 +27,28 @@ const SHOW_PERF = false;
  *  - `depth: true`, near/far kept tight — a 0.01..100 range on a unit sphere
  *    keeps depth precision high enough that the core sphere occludes cleanly.
  */
+/**
+ * Is WebGL actually available?
+ *
+ * Roughly 8% of sessions cannot render a canvas — old hardware, blocklisted
+ * drivers, hardware acceleration switched off, some locked-down enterprise
+ * browsers. Without this check they get a black rectangle and no explanation,
+ * which is indistinguishable from the site being broken.
+ */
+function hasWebGL() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
 export function App() {
   const wrapper = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(true);
+  const [webgl] = useState(hasWebGL);
+  const [contextLost, setContextLost] = useState(false);
 
   // Stop rendering when the canvas is off-screen or the tab is backgrounded.
   // Free performance, and the difference between a page that drains a laptop
@@ -46,6 +65,24 @@ export function App() {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
+
+  if (!webgl) {
+    return (
+      <div className="app">
+        <div className="app__fallback" role="alert">
+          <h1>GitGlobe needs WebGL</h1>
+          <p>
+            This browser can't render the globe. It usually means hardware acceleration is
+            switched off, or the GPU driver is blocked.
+          </p>
+          <p className="muted">
+            Try enabling hardware acceleration in your browser settings, or open the site in a
+            recent version of Chrome, Firefox, Edge, or Safari.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app" ref={wrapper}>
@@ -66,6 +103,28 @@ export function App() {
           // sticker cut out and pasted on; a few points of blue give it
           // somewhere to fall off to.
           gl.setClearColor(new THREE.Color(...SPACE), 1);
+
+          // The browser drops the WebGL context on memory pressure and — most
+          // commonly — when iOS Safari backgrounds the tab for a while. The
+          // default action of `webglcontextlost` is to make the loss permanent:
+          // without preventDefault the context is never restored, and the user
+          // returns from another app to a black rectangle that only a manual
+          // reload fixes. Calling preventDefault is what makes the browser
+          // willing to hand the context back.
+          const canvas = gl.domElement;
+          // 3D content is opaque to assistive technology — a screen reader
+          // finds an unlabelled graphics element it cannot describe. Everything
+          // meaningful (search, domain tabs, the detail panel) already exists in
+          // the DOM, so hide the canvas rather than announcing a black box.
+          canvas.setAttribute('aria-hidden', 'true');
+
+          const onLost = (e: Event) => {
+            e.preventDefault();
+            setContextLost(true);
+          };
+          const onRestored = () => setContextLost(false);
+          canvas.addEventListener('webglcontextlost', onLost);
+          canvas.addEventListener('webglcontextrestored', onRestored);
         }}
       >
         <Suspense fallback={null}>
@@ -73,6 +132,14 @@ export function App() {
         </Suspense>
         {DEV && SHOW_PERF && <PerfOverlay />}
       </Canvas>
+      {contextLost && (
+        <div className="app__fallback" role="status">
+          <p>Rendering paused — restoring the globe…</p>
+          <p className="muted">
+            If this doesn't clear in a few seconds, reload the page.
+          </p>
+        </div>
+      )}
       <Hud />
     </div>
   );

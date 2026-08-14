@@ -72,7 +72,10 @@ export function Hud() {
   };
 
   return (
-    <div className="hud">
+    // `main` rather than `div`: with the canvas hidden from assistive tech, this
+    // subtree is the only content a screen reader has, so it needs to be the
+    // page's main landmark rather than an anonymous container.
+    <main className="hud">
       <Intro />
       {entered && <Reticle />}
 
@@ -130,7 +133,7 @@ export function Hud() {
       </AnimatePresence>
 
       {entered && <CursorReadout />}
-    </div>
+    </main>
   );
 }
 
