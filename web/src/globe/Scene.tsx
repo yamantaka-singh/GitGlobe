@@ -253,18 +253,24 @@ export function Scene() {
   // ---- click to select ------------------------------------------------------
   useEffect(() => {
     const el = gl.domElement;
-    const down = { x: 0, y: 0, at: 0 };
-    const DRAG_SLOP_PX = 5;
+    const down = { x: 0, y: 0, at: 0, touch: false };
+    // A mouse holds within 5px; a finger does not. Anything under ~10px reads a
+    // normal tap as a drag and drops it, which is half of why nodes felt
+    // impossible to grab on a phone.
+    const MOUSE_SLOP_PX = 5;
+    const TOUCH_SLOP_PX = 12;
     const CLICK_MAX_MS = 400;
 
     const onPointerDown = (e: PointerEvent) => {
       down.x = e.clientX;
       down.y = e.clientY;
       down.at = performance.now();
+      down.touch = e.pointerType !== 'mouse';
     };
     const onPointerUp = (e: PointerEvent) => {
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-      if (moved > DRAG_SLOP_PX || performance.now() - down.at > CLICK_MAX_MS) return;
+      const slop = down.touch ? TOUCH_SLOP_PX : MOUSE_SLOP_PX;
+      if (moved > slop || performance.now() - down.at > CLICK_MAX_MS) return;
 
       const store = useGlobeStore.getState();
       const id = store.hoveredId;

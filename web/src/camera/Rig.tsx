@@ -148,7 +148,12 @@ export function Rig({ radius }: { radius: number }) {
 
     c.minDistance = radius * 1.005; // allow zooming right down to the node clusters
     c.maxDistance = radius * 14; // allow zooming way out into deep space
-    c.dollySpeed = 0.9; // faster and more responsive zooming
+    // A wheel notch delivers far more dolly per event than a pinch does, so one
+    // speed cannot serve both: 0.9 that feels right on a trackpad makes pinch
+    // feel like it barely responds. Coarse pointers only, so the desktop feel
+    // is unchanged.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    c.dollySpeed = coarse ? 2.4 : 0.9;
     c.truckSpeed = 0;
     c.smoothTime = 0.32;
     c.draggingSmoothTime = 0.14;

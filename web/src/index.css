@@ -590,8 +590,18 @@ button:focus-visible {
 }
 
 @media (max-width: 860px) {
+  /* The stats panel used to be `display: none` here, which left the toggle
+     button in the topbar switching a state that could never render anything —
+     the button looked broken because nothing it did was visible. It fits fine
+     at 244px; it just needs a height cap so it cannot run off a short screen. */
   .telemetry {
-    display: none;
+    left: 14px;
+    right: 14px;
+    width: auto;
+    bottom: 68px;
+    max-height: 54vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .reticle-card {
     display: none;
@@ -667,8 +677,11 @@ button:focus-visible {
   .intro__meta {
     display: none;
   }
+  /* Landscape phone: keep the panel reachable rather than hiding it outright,
+     but give it most of the screen since height is the scarce axis here. */
   .telemetry {
-    display: none;
+    bottom: 56px;
+    max-height: 62vh;
   }
 }
 

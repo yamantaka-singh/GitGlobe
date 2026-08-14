@@ -37,8 +37,17 @@ export function detectTier(gl: THREE.WebGLRenderer): Tier {
 
   if (/Apple (M\d|GPU)/i.test(renderer) && !mobile) return 'high';
   if (/(SwiftShader|llvmpipe|Software)/i.test(renderer)) return 'low';
-  if (mobile && (mem <= 3 || cores <= 4)) return 'low';
-  if (mobile) return 'mid';
+  if (mobile && mem <= 3) return 'low';
+  // Every phone used to be pinned to `mid`, which caps loading at band 1 — a
+  // third of the corpus (39,747 of 198,731 nodes). A current phone renders the
+  // full set fine, and the whole point of the measured demotion below is that a
+  // static guess is not trustworthy. So start high and let real frame times
+  // decide. The `cores <= 4` rule that used to force `low` here is gone too: iOS
+  // under-reports hardwareConcurrency, so it was demoting exactly the devices
+  // most able to cope.
+  // ponytail: optimistic start, measured demotion is the safety net. If a slow
+  // phone visibly churns through band 2 before demoting, gate on `mem >= 6`.
+  if (mobile) return 'high';
   if (cores <= 4 || mem <= 4) return 'mid';
   return 'high';
 }

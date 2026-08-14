@@ -52,6 +52,26 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
     pointer.current.dirty = true;
   }, []);
 
+  /**
+   * A finger never hovers.
+   *
+   * Selection reads `hoveredId`, which only this hook sets, and only from
+   * `pointermove`. A touch goes down and up with no move in between, so on a
+   * phone `hoveredId` was whatever a stray earlier event left behind — usually
+   * -1, which the click handler reads as "empty space" and clears the
+   * selection. Tapping a node did nothing.
+   *
+   * Picking on `pointerdown` gives the pick pass the ~50-150ms of a normal tap
+   * to run before `pointerup` reads the result. Resetting the throttle matters:
+   * without it the 30Hz gate can swallow the one pick that the tap depends on.
+   */
+  const onPointerDown = useCallback((e: PointerEvent) => {
+    pointer.current.x = e.clientX;
+    pointer.current.y = e.clientY;
+    pointer.current.dirty = true;
+    lastPick.current = 0;
+  }, []);
+
   const onPointerLeave = useCallback(() => {
     pointer.current.dirty = false;
     pointer.current.x = -1;
@@ -61,12 +81,14 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
   useEffect(() => {
     const el = gl.domElement;
     el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerdown', onPointerDown);
     el.addEventListener('pointerleave', onPointerLeave);
     return () => {
       el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('pointerdown', onPointerDown);
       el.removeEventListener('pointerleave', onPointerLeave);
     };
-  }, [gl, onPointerMove, onPointerLeave]);
+  }, [gl, onPointerMove, onPointerDown, onPointerLeave]);
 
   useFrame(() => {
     if (!enabled || clouds.length === 0) return;
