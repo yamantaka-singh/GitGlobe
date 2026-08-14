@@ -1109,10 +1109,12 @@ button:focus-visible {
      hang off the right edge of a 375px screen. */
   .search-box__results {
     position: fixed;
+    top: 64px;
     left: 14px;
     right: 14px;
     width: auto;
     max-height: 46vh;
+    z-index: 10000;
   }
   /* Result rows land at 41px with the desktop padding — just under the 44px
      touch minimum, which is exactly the size that produces mis-taps. */

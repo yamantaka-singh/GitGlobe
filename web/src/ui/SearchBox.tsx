@@ -144,7 +144,10 @@ export function SearchBox() {
       />
 
       {open && (
-        <div className="search-box__results">
+        <div 
+          className="search-box__results"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           {isLoading && <div className="search-box__msg" role="status">Searching...</div>}
           {!isLoading && rows.length === 0 && (
             <div className="search-box__msg" role="status">No results found</div>
@@ -159,9 +162,13 @@ export function SearchBox() {
                     aria-selected={i === active}
                     className={i === active ? 'is-active' : undefined}
                     onMouseEnter={() => setActive(i)}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      onSelect(r);
+                    }}
                     onClick={() => onSelect(r)}
                   >
-                    <span className="repo-name">{r.org}/{r.name}</span>
+                    <span className="repo-name">{r.org ? `${r.org}/${r.name}` : r.name}</span>
                   </button>
                 </li>
               ))}
