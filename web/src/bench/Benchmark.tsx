@@ -33,10 +33,29 @@ import { globeCamera } from '../camera/Rig';
  */
 
 const WARMUP_FRAMES = 40;
-const PHASE_A_MS = 6000;
-const PROBE_STEPS = [1, 2, 3, 5, 7];
-const PROBE_MS = 1100;
 const MAX_SAMPLES = 4096;
+
+/**
+ * Phone profile.
+ *
+ * Phase B measures headroom by rendering the whole scene N extra times in a
+ * single frame. At the desktop steps that peaks at eight full renders of
+ * 198,731 points per frame — on a phone that is a thermal event, not a
+ * measurement: the GPU throttles partway through, so the number it produces is
+ * wrong *and* it can cost a dropped WebGL context. Small screens get a shorter
+ * sweep and stop probing at 3x, which is still enough to answer the only
+ * question that matters on a phone ("is there any margin at all?").
+ *
+ * ponytail: coarse pointer + width, not a device database. Good enough to
+ * separate "phone" from "workstation", which is all this gates.
+ */
+function isSmallScreen() {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 700;
+}
+
+const DESKTOP = { phaseA: 6000, steps: [1, 2, 3, 5, 7], probeMs: 1100 };
+const PHONE = { phaseA: 3000, steps: [1, 2], probeMs: 900 };
 
 /** A frame counts as dropped when it misses its vsync slot by half a period. */
 const DROP_FACTOR = 1.5;
@@ -75,6 +94,7 @@ export function Benchmark() {
     probeN: 0,
     probeDrops: 0,
     headroom: 1,
+    profile: DESKTOP as { phaseA: number; steps: number[]; probeMs: number },
   });
 
   const stop = useCallback(
@@ -87,6 +107,9 @@ export function Benchmark() {
       const store = useGlobeStore.getState();
       store.setAutoRotate(st.prevAutoRotate);
       store.setBenchRunning(false);
+      // Glide back to the pre-run framing rather than stranding the user at
+      // whatever angle the sweep happened to finish on. Runs on abort too.
+      void globeCamera.restoreState(true);
       if (aborted) return;
 
       const n = st.n;
@@ -144,6 +167,10 @@ export function Benchmark() {
       const st = s.current;
 
       if (store.benchRunning) {
+        st.profile = isSmallScreen() ? PHONE : DESKTOP;
+        // Remember where the user was looking; the sweep is about to take the
+        // camera somewhere arbitrary.
+        globeCamera.saveState();
         st.prevAutoRotate = prev.autoRotate;
         useGlobeStore.getState().setAutoRotate(false);
         st.phase = 'warmup';
@@ -188,7 +215,7 @@ export function Benchmark() {
     st.frames++;
 
     // Deterministic sweep — identical every run, so two runs are comparable.
-    const t = (now - st.startedAt) / (PHASE_A_MS + PROBE_STEPS.length * PROBE_MS);
+    const t = (now - st.startedAt) / (st.profile.phaseA + st.profile.steps.length * st.profile.probeMs);
     const polar = Math.PI * (0.5 + 0.3 * Math.sin(t * Math.PI * 6));
     const distance = globeCamera.radius * (1.5 + 1.3 * (0.5 + 0.5 * Math.cos(t * Math.PI * 9)));
     globeCamera.setOrbitAngle(t * Math.PI * 4, polar, distance);
@@ -219,7 +246,7 @@ export function Benchmark() {
       if (calls > st.maxCalls) st.maxCalls = calls;
       if (tris > st.maxTris) st.maxTris = tris;
 
-      if (now - st.phaseStartedAt >= PHASE_A_MS) {
+      if (now - st.phaseStartedAt >= st.profile.phaseA) {
         st.phase = 'probe';
         st.phaseStartedAt = now;
         st.probeIndex = 0;
@@ -230,13 +257,13 @@ export function Benchmark() {
     }
 
     // ---- phase B: headroom -------------------------------------------------
-    const extra = PROBE_STEPS[st.probeIndex];
+    const extra = st.profile.steps[st.probeIndex];
     for (let i = 0; i < extra; i++) gl.render(scene, camera as THREE.Camera);
 
     if (st.probeN < probeSamples.current.length) probeSamples.current[st.probeN++] = dt;
     if (dt > st.period * DROP_FACTOR) st.probeDrops++;
 
-    if (now - st.phaseStartedAt >= PROBE_MS) {
+    if (now - st.phaseStartedAt >= st.profile.probeMs) {
       // Ignore the first few frames of each step — the first frame at a new
       // render multiplier always overruns while the pipeline fills.
       const ratio = st.probeN > 6 ? st.probeDrops / st.probeN : 1;
@@ -249,7 +276,7 @@ export function Benchmark() {
 
       // Stop early once a step fails — headroom is monotonic, so every
       // heavier step would fail too and measuring them wastes four seconds.
-      if (st.probeIndex >= PROBE_STEPS.length || ratio >= PROBE_DROP_TOLERANCE) {
+      if (st.probeIndex >= st.profile.steps.length || ratio >= PROBE_DROP_TOLERANCE) {
         stop(false);
       }
     }

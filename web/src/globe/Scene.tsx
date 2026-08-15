@@ -308,18 +308,30 @@ export function Scene() {
 
   return (
     <>
-      {/* Continuous fill-rate governor. Measures real frame rate against the
-          display's refresh and walks the pixel ratio down when the scene can't
-          keep up — which is what zooming in causes — then back up when it can.
-          Bounded at 0.55 so the globe never turns to mush, and it never touches
-          the node count: the corpus stays whole at every quality level. */}
+      {/* Fill-rate governor — monotonic, and deliberately not continuous.
+          Changing the pixel ratio resizes the drawing buffer, and a fresh
+          buffer starts blank, so every adjustment costs one black frame. The
+          first version of this called `setDprScale` from `onChange`, which on
+          any device sitting near the fps bounds oscillates: the factor drifts
+          up, then down, then up, reallocating the buffer every couple of
+          seconds. That is the periodic black flash and the "stars twinkling"
+          on Safari and low-end phones — the starfield has no animation at all,
+          so the only thing that can make it shimmer is the buffer being
+          rebuilt underneath it.
+
+          So: step down only, never back up, and at most twice. Two
+          reallocations per session worst case instead of an endless cycle, and
+          oscillation is impossible by construction rather than by tuning.
+          ponytail: no recovery path — quality never climbs back within a
+          session. Add one only if a device is seen stuck at 0.55 after the
+          load that caused it has passed. */}
       <PerformanceMonitor
-        factor={1}
-        step={0.12}
         bounds={(refreshRate) => (refreshRate > 90 ? [55, 85] : [45, 58])}
-        onChange={({ factor }) =>
-          useGlobeStore.getState().setDprScale(0.55 + 0.45 * factor)
-        }
+        onDecline={() => {
+          const s = useGlobeStore.getState();
+          if (s.dprScale > 0.74) s.setDprScale(0.75);
+          else if (s.dprScale > 0.56) s.setDprScale(0.55);
+        }}
       />
 
       {/* STATIC — never changes */}

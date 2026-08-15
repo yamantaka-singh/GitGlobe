@@ -129,6 +129,43 @@ class GlobeCamera {
     this.controls?.rotateTo(azimuth, polar, false);
     this.controls?.dollyTo(distance, false);
   }
+
+  /**
+   * Save and restore the framing around something that hijacks the camera.
+   *
+   * The benchmark drives a deterministic sweep and used to simply stop wherever
+   * the sweep ended, dumping the user at a random angle and distance with no
+   * way back to what they were looking at. Saving here rather than in the
+   * benchmark keeps the rule that this class is the only thing that touches the
+   * camera.
+   */
+  private saved: { eye: THREE.Vector3; target: THREE.Vector3 } | null = null;
+
+  saveState() {
+    if (!this.controls) return;
+    const eye = new THREE.Vector3();
+    const target = new THREE.Vector3();
+    this.controls.getPosition(eye);
+    this.controls.getTarget(target);
+    this.saved = { eye, target };
+  }
+
+  async restoreState(smooth = true) {
+    if (!this.controls || !this.saved) return;
+    const { eye, target } = this.saved;
+    this.saved = null;
+    const store = useGlobeStore.getState();
+    store.setCameraBusy(true);
+    try {
+      await this.controls.setLookAt(
+        eye.x, eye.y, eye.z,
+        target.x, target.y, target.z,
+        smooth && !store.reducedMotion,
+      );
+    } finally {
+      useGlobeStore.getState().setCameraBusy(false);
+    }
+  }
 }
 
 export const globeCamera = new GlobeCamera();
