@@ -124,10 +124,17 @@ class GlobeCamera {
     await this.controls.setLookAt(d * 0.34, d * 0.30, d, 0, 0, 0, false);
   }
 
-  /** Used by the benchmark to drive a deterministic orbit. */
+  /**
+   * Used by the benchmark to drive a deterministic orbit.
+   *
+   * The distance goes through the same aspect fit as every other framing here.
+   * Without it the sweep dollied to a raw multiple of the radius, which on a
+   * portrait phone — where the horizontal field of view is the narrow one —
+   * put the camera inside the cloud and filled the screen with points.
+   */
   setOrbitAngle(azimuth: number, polar: number, distance: number) {
     this.controls?.rotateTo(azimuth, polar, false);
-    this.controls?.dollyTo(distance, false);
+    this.controls?.dollyTo(this.fit(distance), false);
   }
 
   /**

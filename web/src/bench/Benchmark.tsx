@@ -55,7 +55,9 @@ function isSmallScreen() {
 }
 
 const DESKTOP = { phaseA: 6000, steps: [1, 2, 3, 5, 7], probeMs: 1100 };
-const PHONE = { phaseA: 3000, steps: [1, 2], probeMs: 900 };
+// ~6s: long enough to read as a measurement rather than a flash, still roughly
+// half the desktop run and nowhere near the thermal load of the 5x/7x probes.
+const PHONE = { phaseA: 4000, steps: [1, 2], probeMs: 1000 };
 
 /** A frame counts as dropped when it misses its vsync slot by half a period. */
 const DROP_FACTOR = 1.5;
@@ -214,11 +216,22 @@ export function Benchmark() {
     st.last = now;
     st.frames++;
 
-    // Deterministic sweep — identical every run, so two runs are comparable.
-    const t = (now - st.startedAt) / (st.profile.phaseA + st.profile.steps.length * st.profile.probeMs);
-    const polar = Math.PI * (0.5 + 0.3 * Math.sin(t * Math.PI * 6));
-    const distance = globeCamera.radius * (1.5 + 1.3 * (0.5 + 0.5 * Math.cos(t * Math.PI * 9)));
-    globeCamera.setOrbitAngle(t * Math.PI * 4, polar, distance);
+    // Deterministic sweep, driven by absolute elapsed seconds at fixed rates
+    // rather than by normalised progress.
+    //
+    // Normalised progress tied the travel to the run length, so shortening the
+    // phone profile did not calm the sweep down — it crammed the same two full
+    // rotations, three polar swings and four dolly cycles into half the time
+    // and made it whip. Fixed rates mean the motion looks identical on every
+    // device and every profile; a shorter run simply sees less of it, and the
+    // per-frame cost being measured is unchanged.
+    //
+    // The ranges are gentler too: the old dolly reached 1.5x radius, close
+    // enough to sit inside the point cloud.
+    const secs = (now - st.startedAt) / 1000;
+    const polar = Math.PI * (0.5 + 0.17 * Math.sin(secs * 0.85));
+    const distance = globeCamera.radius * (2.5 + 0.75 * Math.sin(secs * 0.5));
+    globeCamera.setOrbitAngle(secs * 0.55, polar, distance);
 
     if (st.phase === 'warmup') {
       // Shader compilation and buffer upload land here, so these frames are
