@@ -1190,3 +1190,184 @@ button:focus-visible {
 .app__fallback p:last-child {
   margin-bottom: 0;
 }
+
+/* Error states for data that failed to load. Distinct from empty results so a
+   broken API can never masquerade as a repository with no metadata. */
+.search-box__msg--error,
+.detail-panel__error {
+  color: var(--fail);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-panel__error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------- tutorial */
+
+/* Deliberately a card, not a modal: the point is to explain the globe, so the
+   globe has to stay visible and interactive behind it. */
+.tutorial {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 28px));
+  padding: 18px 20px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px);
+  pointer-events: auto;
+  z-index: 150;
+}
+
+.tutorial__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.tutorial__count {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.tutorial__skip {
+  padding: 6px 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  border-radius: 6px;
+}
+
+.tutorial__skip:hover {
+  color: var(--text);
+  background: rgba(110, 139, 232, 0.1);
+}
+
+.tutorial__title {
+  margin: 0 0 8px;
+  font-family: var(--sans);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.tutorial__body {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.tutorial__dots {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.tutorial__dots span {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.tutorial__dots span.is-active {
+  background: var(--cyan);
+}
+
+.tutorial__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tutorial__back,
+.tutorial__next {
+  /* 44px targets: this is the first thing a new phone user touches. */
+  min-height: 44px;
+  padding: 12px 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  transition: background 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tutorial__back {
+  color: var(--muted);
+}
+
+.tutorial__back:hover {
+  color: var(--text);
+  background: rgba(110, 139, 232, 0.08);
+}
+
+.tutorial__next {
+  color: var(--text);
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(110, 139, 232, 0.16), rgba(110, 139, 232, 0.07));
+}
+
+.tutorial__next:hover {
+  color: #000;
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+/* Re-open control. Circular so it reads as help rather than another label. */
+.topbar__help {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    background 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topbar__help:hover {
+  color: var(--cyan);
+  background: rgba(110, 139, 232, 0.1);
+  border-color: var(--line-strong);
+}
+
+@media (max-width: 560px) {
+  /* Bottom sheet, clear of the readout pill and the home indicator. */
+  .tutorial {
+    left: 14px;
+    right: 14px;
+    width: auto;
+    transform: none;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .tutorial__actions {
+    gap: 10px;
+  }
+  .tutorial__next,
+  .tutorial__back {
+    flex: 1;
+  }
+  .topbar__help {
+    order: 1;
+    width: 34px;
+    height: 34px;
+  }
+}

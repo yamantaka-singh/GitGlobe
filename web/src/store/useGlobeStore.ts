@@ -66,6 +66,8 @@ interface GlobeState {
   /** The globe stays still behind the intro until the user commits to entering. */
   entered: boolean;
   showTelemetry: boolean;
+  /** First-run walkthrough. Re-openable from the topbar afterwards. */
+  tutorialOpen: boolean;
 
   // --- benchmark ---
   benchRunning: boolean;
@@ -89,6 +91,7 @@ interface GlobeState {
   setActiveDomain: (domain: number) => void;
   setEntered: (entered: boolean) => void;
   setShowTelemetry: (on: boolean) => void;
+  setTutorialOpen: (open: boolean) => void;
   setBenchRunning: (running: boolean) => void;
   pushBenchResult: (result: BenchResult) => void;
 }
@@ -116,6 +119,7 @@ export const useGlobeStore = create<GlobeState>((set) => ({
   activeDomain: -1,
   entered: false,
   showTelemetry: false,
+  tutorialOpen: false,
 
   benchRunning: false,
   benchResults: [],
@@ -151,6 +155,7 @@ export const useGlobeStore = create<GlobeState>((set) => ({
   setActiveDomain: (activeDomain) => set({ activeDomain }),
   setEntered: (entered) => set({ entered }),
   setShowTelemetry: (showTelemetry) => set({ showTelemetry }),
+  setTutorialOpen: (tutorialOpen) => set({ tutorialOpen }),
   setBenchRunning: (benchRunning) => set({ benchRunning }),
   pushBenchResult: (result) => set((s) => ({ benchResults: [result, ...s.benchResults].slice(0, 8) })),
 }));

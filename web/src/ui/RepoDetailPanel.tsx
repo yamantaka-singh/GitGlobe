@@ -33,12 +33,14 @@ export function RepoDetailPanel() {
 
   // Fetch real metadata from the API. Pass the repo name so the backend can
   // fall back to GitHub's public API for repos not in our database.
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['repo', repoId, tileName, selectedId],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
-      const res = await fetch(`${API}/repo/${repoId}${params}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch(`${API}/repo/${repoId}${params}`).catch((e) => {
+        throw new Error(`Cannot reach ${new URL(API).host} (${e?.message ?? 'network error'})`);
+      });
+      if (!res.ok) throw new Error(`${new URL(API).host} returned HTTP ${res.status}`);
       return res.json();
     },
     enabled: selectedId >= 0 && repoId > 0,
@@ -95,7 +97,11 @@ export function RepoDetailPanel() {
   const domainName = domains[domainIndex] ?? '—';
   const url = `https://github.com/${identity.fullName}`;
 
-  // Display values — real when loaded, placeholder text while fetching
+  // Display values — real when loaded, placeholder text while fetching.
+  // On failure these deliberately do NOT fall back to "—"/"Unknown"/"0": those
+  // read as a repository that genuinely has no description, no language and no
+  // stars, so a dead API looked identical to sparse data. The banner below
+  // carries the real reason instead.
   const description = isLoading ? 'Loading…' : (data?.description || '—');
   const stars = isLoading ? '…' : (data?.stars !== undefined ? group(data.stars) : '0');
   const language = isLoading ? '…' : (data?.language || 'Unknown');
@@ -157,6 +163,13 @@ export function RepoDetailPanel() {
         <h2 className="detail-panel__title">{identity.name}</h2>
       </div>
       <div className="detail-panel__org">{identity.org}</div>
+
+      {isError && (
+        <p className="detail-panel__error" role="alert">
+          Couldn't load this repository's details.
+          <span className="muted"> {(error as Error)?.message || 'Request failed'}</span>
+        </p>
+      )}
 
       <p className="detail-panel__desc">{description}</p>
 

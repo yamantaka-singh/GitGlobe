@@ -9,6 +9,7 @@ import { Reticle } from './Reticle';
 import { Intro } from './Intro';
 import { RepoDetailPanel } from './RepoDetailPanel';
 import { SearchBox } from './SearchBox';
+import { Tutorial } from './Tutorial';
 import { group } from './num';
 import { AnimatePresence } from 'framer-motion';
 
@@ -116,6 +117,15 @@ export function Hud() {
         <SearchBox />
 
         <button
+          className="topbar__help"
+          onClick={() => useGlobeStore.getState().setTutorialOpen(true)}
+          aria-label="How GitGlobe works"
+          title="How GitGlobe works"
+        >
+          ?
+        </button>
+
+        <button
           className="topbar__toggle"
           onClick={() => useGlobeStore.getState().setShowTelemetry(!showTelemetry)}
           aria-pressed={showTelemetry}
@@ -132,6 +142,7 @@ export function Hud() {
         {entered && <RepoDetailPanel />}
       </AnimatePresence>
 
+      {entered && <Tutorial />}
       {entered && <CursorReadout />}
     </main>
   );
