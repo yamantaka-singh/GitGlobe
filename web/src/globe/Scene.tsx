@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
+// Narrow import: drei is large and its barrel file pulls in far more than this.
+import { PerformanceMonitor } from '@react-three/drei/core/PerformanceMonitor';
 
-import { Atmosphere, Nebula, Planet, Starfield } from './Backdrop';
+import { Nebula, Planet, Starfield } from './Backdrop';
 import { usePlanetTexture } from './usePlanetTexture';
 import { PointCloud, type PointCloudHandle } from './PointCloud';
 import { ArcLayer, ArcPool, AMBIENT_STYLE, FOCUS_STYLE, type ArcEndpoints } from './ArcLayer';
@@ -253,18 +255,24 @@ export function Scene() {
   // ---- click to select ------------------------------------------------------
   useEffect(() => {
     const el = gl.domElement;
-    const down = { x: 0, y: 0, at: 0 };
-    const DRAG_SLOP_PX = 5;
+    const down = { x: 0, y: 0, at: 0, touch: false };
+    // A mouse holds within 5px; a finger does not. Anything under ~10px reads a
+    // normal tap as a drag and drops it, which is half of why nodes felt
+    // impossible to grab on a phone.
+    const MOUSE_SLOP_PX = 5;
+    const TOUCH_SLOP_PX = 12;
     const CLICK_MAX_MS = 400;
 
     const onPointerDown = (e: PointerEvent) => {
       down.x = e.clientX;
       down.y = e.clientY;
       down.at = performance.now();
+      down.touch = e.pointerType !== 'mouse';
     };
     const onPointerUp = (e: PointerEvent) => {
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-      if (moved > DRAG_SLOP_PX || performance.now() - down.at > CLICK_MAX_MS) return;
+      const slop = down.touch ? TOUCH_SLOP_PX : MOUSE_SLOP_PX;
+      if (moved > slop || performance.now() - down.at > CLICK_MAX_MS) return;
 
       const store = useGlobeStore.getState();
       const id = store.hoveredId;
@@ -286,18 +294,39 @@ export function Scene() {
     };
   }, [gl]);
 
+  // Fill rate is the thing that actually moves under load here. Points are sized
+  // in screen space, so zooming in multiplies the shaded pixels per point while
+  // the geometry cost stays flat — the scene goes fragment-bound and the frame
+  // rate falls even though nothing was added. Scaling the pixel ratio is the
+  // cheapest lever (quadratic in fragments) and, unlike dropping a tier, it
+  // costs a little sharpness rather than 155,000 repositories.
   const dprCap = useMemo(() => TIER_BUDGET(tier).dprCap, [tier]);
+  const dprScale = useGlobeStore((s) => s.dprScale);
   useEffect(() => {
-    gl.setPixelRatio(Math.min(window.devicePixelRatio, dprCap));
-  }, [gl, dprCap]);
+    gl.setPixelRatio(Math.min(window.devicePixelRatio, dprCap) * dprScale);
+  }, [gl, dprCap, dprScale]);
 
   return (
     <>
+      {/* Continuous fill-rate governor. Measures real frame rate against the
+          display's refresh and walks the pixel ratio down when the scene can't
+          keep up — which is what zooming in causes — then back up when it can.
+          Bounded at 0.55 so the globe never turns to mush, and it never touches
+          the node count: the corpus stays whole at every quality level. */}
+      <PerformanceMonitor
+        factor={1}
+        step={0.12}
+        bounds={(refreshRate) => (refreshRate > 90 ? [55, 85] : [45, 58])}
+        onChange={({ factor }) =>
+          useGlobeStore.getState().setDprScale(0.55 + 0.45 * factor)
+        }
+      />
+
       {/* STATIC — never changes */}
       <Nebula />
       <Starfield />
       <Planet radius={GLOBE_RADIUS} surface={surface} />
-      <Atmosphere radius={GLOBE_RADIUS} />
+      {/* <Atmosphere radius={GLOBE_RADIUS} /> */}
 
       {/* DRIVEN — the single owner of the camera */}
       <Rig radius={GLOBE_RADIUS} />

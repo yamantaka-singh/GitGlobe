@@ -27,13 +27,13 @@ export const PLANET_SURFACE = {
   /** The void between filaments. Almost pure black for an OLED techy look. */
   deep: [0.008, 0.008, 0.016] as RGB,
   /** Base gas: Very dark indigo/blue to keep the background clean. */
-  mid: [0.024, 0.031, 0.071] as RGB,
+  mid: [0.005, 0.005, 0.015] as RGB,
   /** Mid-density emission — Dimmed techy cyan so dots pop. */
-  light: [0.034, 0.245, 0.310] as RGB,
+  light: [0.01, 0.05, 0.06] as RGB,
   /** Hot cores — Faint vivid cyan. */
-  pale: [0.090, 0.376, 0.392] as RGB,
+  pale: [0.02, 0.08, 0.08] as RGB,
   /** Ionisation fronts — Dimmed neon magenta/pink for a subtle sharp contrast. */
-  cirrus: [0.364, 0.064, 0.256] as RGB,
+  cirrus: [0.08, 0.01, 0.05] as RGB,
   /** Dust lanes. Opaque and near black to cut sharply through the neon. */
   storm: [0.004, 0.004, 0.008] as RGB,
 } as const;
@@ -58,18 +58,18 @@ export const PLANET_SURFACE = {
  * nodes still win.
  */
 export const DOMAIN_TERRAIN_TINT: readonly RGB[] = [
-  [0.421, 0.224, 0.374] as RGB, // AI / ML — deep rose
-  [0.465, 0.340, 0.402] as RGB, // Web frontend — deep salmon
-  [0.411, 0.251, 0.216] as RGB, // Data and storage — deep amber
-  [0.465, 0.391, 0.303] as RGB, // Infrastructure — deep gold
-  [0.296, 0.307, 0.221] as RGB, // Languages and compilers — deep olive
-  [0.311, 0.439, 0.411] as RGB, // Systems and embedded — deep mint
-  [0.065, 0.331, 0.385] as RGB, // Data engineering — deep teal
-  [0.196, 0.437, 0.531] as RGB, // Security — deep cyan
-  [0.151, 0.303, 0.501] as RGB, // Graphics and games — deep azure
-  [0.367, 0.390, 0.531] as RGB, // Mobile — deep periwinkle
-  [0.335, 0.253, 0.495] as RGB, // Automation and tooling — deep violet
-  [0.465, 0.343, 0.531] as RGB, // Science and numerics — deep orchid
+  [0.10, 0.05, 0.09] as RGB, // AI / ML
+  [0.11, 0.08, 0.10] as RGB, // Web frontend
+  [0.10, 0.06, 0.05] as RGB, // Data and storage
+  [0.11, 0.09, 0.07] as RGB, // Infrastructure
+  [0.07, 0.07, 0.05] as RGB, // Languages and compilers
+  [0.07, 0.10, 0.10] as RGB, // Systems and embedded
+  [0.01, 0.08, 0.09] as RGB, // Data engineering
+  [0.04, 0.10, 0.13] as RGB, // Security
+  [0.03, 0.07, 0.12] as RGB, // Graphics and games
+  [0.09, 0.09, 0.13] as RGB, // Mobile
+  [0.08, 0.06, 0.12] as RGB, // Automation and tooling
+  [0.11, 0.08, 0.13] as RGB, // Science and numerics
 ];
 
 /**

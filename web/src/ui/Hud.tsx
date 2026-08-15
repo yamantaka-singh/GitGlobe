@@ -10,6 +10,7 @@ import { Intro } from './Intro';
 import { RepoDetailPanel } from './RepoDetailPanel';
 import { SearchBox } from './SearchBox';
 import { group } from './num';
+import { AnimatePresence } from 'framer-motion';
 
 function rgb(i: number) {
   const c = DOMAIN_PALETTE[i % DOMAIN_PALETTE.length];
@@ -50,8 +51,6 @@ export function Hud() {
   const entered = useGlobeStore((s) => s.entered);
   const activeDomain = useGlobeStore((s) => s.activeDomain);
   const showTelemetry = useGlobeStore((s) => s.showTelemetry);
-  const selectedId = useGlobeStore((s) => s.selectedId);
-  const hoveredId = useGlobeStore((s) => s.hoveredId);
 
   const domains = sceneIndex.manifest?.domains ?? [];
 
@@ -73,7 +72,10 @@ export function Hud() {
   };
 
   return (
-    <div className="hud">
+    // `main` rather than `div`: with the canvas hidden from assistive tech, this
+    // subtree is the only content a screen reader has, so it needs to be the
+    // page's main landmark rather than an anonymous container.
+    <main className="hud">
       <Intro />
       {entered && <Reticle />}
 
@@ -122,24 +124,46 @@ export function Hud() {
         </button>
       </header>
 
-      {entered && showTelemetry && <Telemetry />}
+      <AnimatePresence mode="wait">
+        {entered && showTelemetry && <Telemetry key="telemetry" />}
+      </AnimatePresence>
 
-      {entered && <RepoDetailPanel />}
+      <AnimatePresence>
+        {entered && <RepoDetailPanel />}
+      </AnimatePresence>
 
-      {entered && selectedId === -1 && (
-        <div className="readout">
-          {hoveredId >= 0 ? (
-            <span className="muted">↳ click to pin this node and hold its connections</span>
-          ) : (
-            <span className="muted">↳ drag to orbit · scroll to zoom · hover a node</span>
-          )}
-        </div>
+      {entered && <CursorReadout />}
+    </main>
+  );
+}
+
+function CursorReadout() {
+  const selectedId = useGlobeStore((s) => s.selectedId);
+  const hoveredId = useGlobeStore((s) => s.hoveredId);
+
+  if (selectedId !== -1) return null;
+
+  // Two hints, one per input model, switched in CSS on `(hover: none)`. A phone
+  // has no scroll wheel and no hover, so the desktop copy was instructing touch
+  // users to do two things their device cannot do.
+  return (
+    <div className="readout">
+      {hoveredId >= 0 ? (
+        <span className="muted">↳ click to pin this node and hold its connections</span>
+      ) : (
+        <>
+          <span className="muted readout__pointer">↳ drag to orbit · scroll to zoom · hover a node</span>
+          <span className="muted readout__touch">↳ drag to orbit · pinch to zoom · tap a node</span>
+        </>
       )}
     </div>
   );
 }
 
 const SHOW_BENCHMARK = true;
+
+import { useShallow } from 'zustand/react/shallow';
+import { motion } from 'framer-motion';
 
 function Telemetry() {
   const fps = useFps();
@@ -155,13 +179,32 @@ function Telemetry() {
     showAmbientArcs,
     benchRunning,
     benchResults,
-  } = useGlobeStore();
+  } = useGlobeStore(
+    useShallow((s) => ({
+      totalPoints: s.totalPoints,
+      loadedBands: s.loadedBands,
+      graphReady: s.graphReady,
+      ambientArcCount: s.ambientArcCount,
+      focusArcCount: s.focusArcCount,
+      tier: s.tier,
+      sizeScale: s.sizeScale,
+      autoRotate: s.autoRotate,
+      showAmbientArcs: s.showAmbientArcs,
+      benchRunning: s.benchRunning,
+      benchResults: s.benchResults,
+    }))
+  );
 
   const graphMeta = sceneIndex.manifest?.graph;
   const latest = benchResults[0];
 
   return (
-    <section className="telemetry">
+    <motion.section 
+      className="telemetry"
+      initial={{ opacity: 0, x: -20, filter: 'blur(4px)' }}
+      animate={{ opacity: 1, x: 0, filter: 'blur(0px)', transition: { type: 'spring' as const, damping: 20, stiffness: 100 } }}
+      exit={{ opacity: 0, x: -10, filter: 'blur(2px)', transition: { duration: 0.2 } }}
+    >
       <span className="telemetry__bracket telemetry__bracket--tl" />
       <span className="telemetry__bracket telemetry__bracket--br" />
 
@@ -252,6 +295,6 @@ function Telemetry() {
           )}
         </>
       )}
-    </section>
+    </motion.section>
   );
 }

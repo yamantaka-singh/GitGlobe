@@ -8,6 +8,7 @@ import { degreeOf, neighboursOf, EDGE_SIMILAR_TO } from '../graph/format';
 import { globeCamera } from '../camera/Rig';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { group } from './num';
 
 function rgb(i: number) {
@@ -23,10 +24,9 @@ export function RepoDetailPanel() {
   // ---- hooks (unconditional, always in the same order) ----------------------
   const selectedId = useGlobeStore((s) => s.selectedId);
   const setSelected = useGlobeStore((s) => s.setSelected);
-  const focusArcCount = useGlobeStore((s) => s.focusArcCount);
 
   const ref = selectedId >= 0 ? sceneIndex.resolve(selectedId) : null;
-  const repoId = ref?.repoId ?? 0;
+  const repoId = ref?.repoId ?? (selectedId >= 0 ? selectedId + 1 : 0);
   const domain = ref?.domain ?? 0;
   // Get the name from the tile names file — needed for GitHub API fallback
   const tileName = ref ? repoIdentity(repoId, domain).fullName : '';
@@ -34,14 +34,14 @@ export function RepoDetailPanel() {
   // Fetch real metadata from the API. Pass the repo name so the backend can
   // fall back to GitHub's public API for repos not in our database.
   const { data, isLoading } = useQuery({
-    queryKey: ['repo', repoId, tileName],
+    queryKey: ['repo', repoId, tileName, selectedId],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
       const res = await fetch(`${API}/repo/${repoId}${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    enabled: !!ref && repoId > 0,
+    enabled: selectedId >= 0 && repoId > 0,
     retry: false,
     staleTime: 5 * 60_000,
   });
@@ -49,14 +49,14 @@ export function RepoDetailPanel() {
   const [showList, setShowList] = useState<'dependents' | 'dependencies' | 'alternatives' | null>(null);
 
   const { data: graphData, isLoading: isGraphLoading } = useQuery({
-    queryKey: ['graph', repoId, tileName],
+    queryKey: ['graph', repoId, tileName, selectedId],
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
       const res = await fetch(`${API}/graph/${repoId}${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
-    enabled: !!ref && repoId > 0 && showList !== null,
+    enabled: selectedId >= 0 && repoId > 0 && showList !== null,
     retry: false,
     staleTime: 5 * 60_000,
   });
@@ -66,7 +66,7 @@ export function RepoDetailPanel() {
   }, [selectedId]);
 
   // ---- early exits (after all hooks) ----------------------------------------
-  if (!ref || selectedId < 0) return null;
+  if (selectedId < 0) return null;
 
   // ---- derive display values ------------------------------------------------
   // Prefer the API's full_name (real GitHub name) over the procedural generator.
@@ -136,7 +136,14 @@ export function RepoDetailPanel() {
   };
 
   return (
-    <div className="detail-panel" role="dialog" aria-label="Repository Details">
+    <motion.div 
+      className="detail-panel" 
+      role="dialog" 
+      aria-label="Repository Details"
+      initial={{ opacity: 0, y: 40, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1, transition: { type: 'spring' as const, damping: 22, stiffness: 150 } }}
+      exit={{ opacity: 0, y: 30, scale: 0.95, transition: { duration: 0.2 } }}
+    >
       <button
         className="detail-panel__close"
         onClick={() => setSelected(-1)}
@@ -218,7 +225,7 @@ export function RepoDetailPanel() {
           </button>
         </dd>
         <dt>Focus Arcs</dt>
-        <dd style={{ color: '#FFFFFF' }}>{focusArcCount}</dd>
+        <dd style={{ color: '#FFFFFF' }}><FocusArcCounter /></dd>
       </dl>
 
       <a
@@ -260,7 +267,12 @@ export function RepoDetailPanel() {
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
+}
+
+function FocusArcCounter() {
+  const focusArcCount = useGlobeStore((s) => s.focusArcCount);
+  return <>{focusArcCount}</>;
 }
 

@@ -124,7 +124,7 @@ export function Nebula() {
 
   return (
     <mesh material={material} raycast={() => null} frustumCulled={false} renderOrder={-1}>
-      <boxGeometry args={[2, 2, 2]} />
+      <sphereGeometry args={[80, 64, 48]} />
     </mesh>
   );
 }
@@ -248,39 +248,18 @@ const PLANET_FRAG = /* glsl */ `
     vec3 toCam = normalize(cameraPosition - vPosW);
     float facing = max(dot(n, toCam), 0.0);
 
-    vec4 surf = texture2D(uSurface, vUv);
-    // Until the bake lands, fall back to flat ocean rather than black — a
-    // one-frame black sphere reads as a load failure.
-    // Restore full albedo base brightness
-    vec3 albedo = mix(uFallback, surf.rgb, uHasSurface);
-    float cityLights = surf.a * uHasSurface;
-
-    // ---- emission ----------------------------------------------------------
-    // A nebula is self-luminous, so there is no terminator to speak of. The sun
-    // term is kept only as a weak modelling cue: with no directional variation
-    // at all a sphere of glowing gas flattens into a disc and the globe stops
-    // reading as a globe.
     float sun = dot(n, normalize(uSunDir));
     float day = smoothstep(-uTerminator, uTerminator, sun);
 
-    vec3 rgb = albedo * (uNightFloor + (1.0 - uNightFloor) * day);
+    // Deep midnight blue, very close to black but unmistakably blue
+    vec3 deepMidnight = vec3(0.006, 0.015, 0.038); // near-black navy
+    vec3 navyBlue     = vec3(0.018, 0.042, 0.095); // subtle ambient blue
+    
+    vec3 rgb = mix(deepMidnight, navyBlue, day * 0.4 + facing * 0.6);
 
-    float night = 1.0 - day;
-    // Boost base emissive so repos glow brightly, but balance it heavily towards the night side
-    // Front side (night=0): multiplier is 0.25 (keeps day from glaring)
-    // Back side (night=1): multiplier is 1.25 (keeps night bright and punchy)
-    vec3 emissive = albedo * 1.45 + uCityLight * 0.25;
-    rgb += emissive * cityLights * (0.85 + 0.6 * night);
-
-    // ---- graticule ---------------------------------------------------------
-    // Kept very faint now that there is terrain to read. It exists to say
-    // "this is an instrument", not to be looked at.
-    float theta = vUv.y;
-    float phi = vUv.x;
-    float lines = max(gridLine(theta, 9.0, 1.4), gridLine(phi, 18.0, 1.4));
-    lines *= smoothstep(0.0, 0.10, theta) * smoothstep(0.0, 0.10, 1.0 - theta);
-    float grazing = pow(1.0 - facing, 2.4);
-    rgb += uGraticule * lines * grazing * uGraticuleGain * (0.25 + 0.75 * day);
+    // Faint atmospheric grazing edge so the sphere has clean definition against space
+    float fresnel = pow(1.0 - facing, 4.0);
+    rgb += vec3(0.025, 0.060, 0.140) * fresnel * 0.45;
 
     gl_FragColor = vec4(rgb, 1.0);
   }

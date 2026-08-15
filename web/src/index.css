@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 :root {
   /* Sampled from the reference: black space, periwinkle atmosphere, violet
@@ -29,7 +29,8 @@
   --color-ring: #0F172A;
 
   /* Editorial sans for names and headlines, mono strictly for telemetry. */
-  --sans: "Fira Sans", "Helvetica Neue", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --sans: "Space Grotesk", "Helvetica Neue", Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --inter: "Inter", "Helvetica Neue", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --mono: "Fira Code", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
 }
@@ -45,8 +46,9 @@ body,
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font: 400 13px/1.6 var(--sans);
+  font: 400 13px/1.6 var(--inter);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
@@ -91,7 +93,22 @@ button:focus-visible {
   inset: 0;
   display: flex;
   align-items: center;
-  padding: 0 clamp(24px, 7vw, 120px);
+  /* `body` is `overflow: hidden` (the globe must not scroll), so this panel is
+     the only thing that can scroll — and it did not. Centred content taller
+     than the viewport overflowed equally off both ends with no way to reach it,
+     which is why the team row and its GitHub/LinkedIn links were cut off the
+     bottom on phones and short laptop windows.
+
+     `auto` margins on the inner block keep the centred look while letting the
+     box grow past the viewport, which plain `align-items: center` will not do:
+     a centred flex item overflowing its container is unreachable in the start
+     direction. Safe-area padding keeps the last row clear of the iOS home
+     indicator. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: max(24px, env(safe-area-inset-top)) clamp(24px, 7vw, 120px)
+    max(24px, env(safe-area-inset-bottom));
   background: linear-gradient(100deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.72) 46%, rgba(0, 0, 0, 0) 78%);
   pointer-events: auto;
   transition: opacity 600ms ease, transform 600ms ease;
@@ -105,6 +122,14 @@ button:focus-visible {
 
 .intro__inner {
   max-width: 560px;
+  /* Keeps the vertical centring on tall screens, but lets the block start at
+     the top and scroll once it is taller than the viewport. */
+  margin: auto 0;
+  /* A flex item defaults to `min-width: auto`, which refuses to shrink below
+     the widest thing inside it. The team row is 467px of unwrappable avatars,
+     so on a 375px phone the whole intro was pinned at 467px and every line of
+     copy was clipped mid-word. `max-width` alone cannot undo that. */
+  min-width: 0;
 }
 
 .intro__eyebrow {
@@ -118,10 +143,11 @@ button:focus-visible {
 
 .intro__headline {
   margin: 0 0 22px;
+  font-family: var(--sans);
   font-size: clamp(38px, 6.2vw, 74px);
-  font-weight: 300;
+  font-weight: 500;
   line-height: 1.03;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
 }
 
 .intro__body {
@@ -132,18 +158,36 @@ button:focus-visible {
   color: var(--muted);
 }
 
+/* Same palette, better button. It was a hairline rectangle with no fill, which
+   at full width on a phone reads as an empty box rather than the primary
+   action. Rounded, given a faint fill drawn from the existing periwinkle, and
+   lifted on hover — no new colours introduced. */
 .intro__start {
-  padding: 13px 26px;
+  padding: 14px 28px;
   font-family: var(--mono);
   font-size: 13px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   border: 1px solid var(--line-strong);
-  transition: background 150ms, color 150ms;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(110, 139, 232, 0.14), rgba(110, 139, 232, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 120ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.intro__start:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .intro__start:hover:not(:disabled) {
   color: #000;
   background: var(--cyan);
+  border-color: var(--cyan);
+  box-shadow: 0 6px 22px rgba(110, 139, 232, 0.32);
 }
 
 .intro__start:disabled {
@@ -228,7 +272,11 @@ button:focus-visible {
   white-space: nowrap;
   color: rgba(110, 139, 232, 0.7);
   border-bottom: 1px solid transparent;
-  transition: color 130ms, border-color 130ms, text-shadow 130ms;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), text-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tabs button:active {
+  transform: scale(0.96);
 }
 
 .tabs button:hover {
@@ -242,16 +290,32 @@ button:focus-visible {
   text-shadow: 0 0 10px rgba(110, 139, 232, 0.8);
 }
 
+/* Reads as a control rather than stray text, and gets a real 44px touch target
+   on phones without changing where it sits. */
 .topbar__toggle {
   flex: none;
+  padding: 8px 12px;
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.05em;
   color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    background 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .topbar__toggle:hover {
   color: var(--cyan);
+  background: rgba(110, 139, 232, 0.08);
+  border-color: var(--line);
+}
+
+.topbar__toggle[aria-pressed='true'] {
+  color: var(--text);
+  background: rgba(110, 139, 232, 0.12);
+  border-color: var(--line);
 }
 
 /* ---------------------------------------------------------------- telemetry */
@@ -265,8 +329,10 @@ button:focus-visible {
   font-family: var(--mono);
   background: var(--panel);
   border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
   pointer-events: auto;
+  transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .telemetry__bracket {
@@ -416,8 +482,26 @@ button:focus-visible {
   white-space: nowrap;
   background: var(--panel);
   border: 1px solid var(--line);
-  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(24px);
+  border-radius: 20px;
   pointer-events: auto;
+}
+
+/* Input-model hints: show the pointer copy by default, swap to the touch copy
+   on devices with no hover. Coarse-pointer devices get the touch wording even
+   at tablet widths, which a width breakpoint alone would miss. */
+.readout__touch {
+  display: none;
+}
+
+@media (hover: none) {
+  .readout__pointer {
+    display: none;
+  }
+  .readout__touch {
+    display: inline;
+  }
 }
 
 .readout i {
@@ -483,7 +567,8 @@ button:focus-visible {
   background: rgba(0, 0, 0, 0.9);
   border: 1px solid;
   border-left-width: 2px;
-  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
 }
 
 .reticle-card__name {
@@ -553,8 +638,18 @@ button:focus-visible {
 }
 
 @media (max-width: 860px) {
+  /* The stats panel used to be `display: none` here, which left the toggle
+     button in the topbar switching a state that could never render anything —
+     the button looked broken because nothing it did was visible. It fits fine
+     at 244px; it just needs a height cap so it cannot run off a short screen. */
   .telemetry {
-    display: none;
+    left: 14px;
+    right: 14px;
+    width: auto;
+    bottom: 68px;
+    max-height: 54vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .reticle-card {
     display: none;
@@ -566,6 +661,11 @@ button:focus-visible {
     background: linear-gradient(180deg, rgba(2, 2, 4, 0.94) 0%, rgba(2, 2, 4, 0.7) 62%, rgba(2, 2, 4, 0) 100%);
     align-items: flex-start;
     padding-top: 13vh;
+  }
+  /* Auto margins beat `align-items`, so the centring trick has to be switched
+     off here or it would undo the top-aligned mobile framing above. */
+  .intro__inner {
+    margin: 0;
   }
   .intro__meta {
     gap: 26px;
@@ -584,11 +684,31 @@ button:focus-visible {
 /* Phone: touch targets get bigger, the reticle card is already gone, and the
    headline has to stop competing with the globe for vertical space. */
 @media (max-width: 560px) {
+  /* One row cannot hold a 200px search field, the stats toggle, and ten domain
+     tabs in 375px. Flexed onto one line the tabs were crushed to 53px holding
+     1371px of content — a scroll strip too narrow to read a single label. So
+     wrap: controls on the first row, the domain strip full-width on the
+     second, where its horizontal scroll is actually usable. */
   .topbar {
-    padding: 12px 14px;
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
   }
+  .topbar__toggle {
+    order: 1;
+    flex: none;
+  }
+  .tabs {
+    order: 2;
+    flex: 1 0 100%;
+    /* Momentum scrolling, and don't let a horizontal swipe on the strip get
+       stolen by the globe's rotate gesture underneath. */
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+  }
+  /* 44px minimum touch targets — the desktop paddings land around 28px. */
   .tabs button {
-    padding: 8px 10px;
+    padding: 10px 12px;
   }
   .intro__headline {
     font-size: clamp(30px, 10vw, 44px);
@@ -610,8 +730,11 @@ button:focus-visible {
   .intro__meta {
     display: none;
   }
+  /* Landscape phone: keep the panel reachable rather than hiding it outright,
+     but give it most of the screen since height is the scarce axis here. */
   .telemetry {
-    display: none;
+    bottom: 56px;
+    max-height: 62vh;
   }
 }
 
@@ -632,10 +755,10 @@ button:focus-visible {
   background: rgba(15, 23, 42, 0.95);
   border: 1px solid #334155;
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
   pointer-events: auto;
-  font-family: var(--sans);
+  font-family: var(--inter);
   color: #FFFFFF;
   z-index: 100;
   display: flex;
@@ -679,9 +802,11 @@ button:focus-visible {
 
 .detail-panel__title {
   margin: 0;
+  font-family: var(--sans);
   font-size: 18px;
   font-weight: 600;
   line-height: 1.2;
+  letter-spacing: -0.02em;
   color: #FFFFFF;
   word-break: break-word;
 }
@@ -767,7 +892,18 @@ button:focus-visible {
     left: 16px;
     right: 16px;
     width: auto;
+    max-height: 50vh;
+    overflow-y: auto;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: slideUp 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* ---------------------------------------------------------------- search */
@@ -831,7 +967,10 @@ button:focus-visible {
   transition: background 150ms;
 }
 
-.search-box__list button:hover {
+/* Keyboard highlight reuses the hover fill exactly — arrowing through the list
+   should look identical to hovering it, not introduce a second visual state. */
+.search-box__list button:hover,
+.search-box__list button.is-active {
   background: var(--color-secondary);
 }
 
@@ -849,6 +988,7 @@ button:focus-visible {
 .intro__team {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 32px;
   margin-top: 48px;
   padding-top: 32px;
@@ -944,4 +1084,109 @@ button:focus-visible {
 
 .btn-icon-glossy:active img {
   transform: translateY(0) scale(0.94);
+}
+
+/* Phone overrides for everything defined *below* the main responsive block.
+   These live at the end of the file on purpose: `.search-box__input`,
+   `.detail-panel__close` and `.intro__team-avatar` are all declared further
+   down than the `@media (max-width: 560px)` section above, so an override
+   placed up there loses to the base rule on equal specificity and silently
+   does nothing. Same breakpoint, different position in the cascade. */
+@media (max-width: 560px) {
+  /* The search field is width-driven at desktop sizes (200px, 280px on focus).
+     On a phone it has to be the flex item that absorbs the leftover space
+     instead, or the focus animation shoves the stats toggle off-screen. */
+  .search-box {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .search-box__input,
+  .search-box__input:focus {
+    width: 100%;
+  }
+  /* Anchored to the viewport rather than the input, so a 280px dropdown can't
+     hang off the right edge of a 375px screen. */
+  .search-box__results {
+    position: fixed;
+    top: 64px;
+    left: 14px;
+    right: 14px;
+    width: auto;
+    max-height: 46vh;
+    z-index: 10000;
+  }
+  /* Result rows land at 41px with the desktop padding — just under the 44px
+     touch minimum, which is exactly the size that produces mis-taps. */
+  .search-box__list button {
+    padding: 13px 12px;
+  }
+  .detail-panel__close {
+    width: 44px;
+    height: 44px;
+    top: 6px;
+    right: 6px;
+  }
+  .intro__team {
+    gap: 18px;
+    margin-top: 32px;
+    padding-top: 22px;
+  }
+  .intro__team-member {
+    flex: 1 1 100%;
+  }
+  .intro__team-avatar {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* Short viewports — phones in landscape, where height is the scarce axis.
+   The base dropdown is 320px tall, which overflows a 375px-high window once
+   the topbar is accounted for. Also placed after `.search-box__results` so it
+   actually wins. */
+@media (max-height: 520px) {
+  .search-box__results {
+    max-height: 60vh;
+  }
+  .detail-panel {
+    max-height: 74vh;
+  }
+}
+
+/* Failure surfaces: shown only when WebGL is unavailable or the GL context has
+   been dropped. Deliberately plain and token-driven — it never appears in a
+   healthy session, so it carries no design weight. */
+.app__fallback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(46ch, calc(100vw - 32px));
+  padding: 24px 28px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(24px);
+  pointer-events: auto;
+  z-index: 200;
+}
+
+.app__fallback h1 {
+  margin: 0 0 12px;
+  font-family: var(--sans);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.app__fallback p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.app__fallback p:last-child {
+  margin-bottom: 0;
 }

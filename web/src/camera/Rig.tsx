@@ -35,6 +35,28 @@ class GlobeCamera {
   }
 
   /**
+   * Scale a framing distance so the globe fits the *narrow* axis.
+   *
+   * three.js `fov` is the vertical field of view, so every distance below was
+   * tuned against a landscape viewport where the horizontal fov is the wider
+   * one. Rotate a phone to portrait and the horizontal fov becomes the narrow
+   * axis — at 375x812 it collapses from 40° to about 19°, so the radius-1
+   * sphere needs a distance of ~6 and was being drawn at 2.6. The result was a
+   * globe cropped well past both screen edges with no way to zoom out to it.
+   *
+   * tan(hFov/2) = tan(vFov/2) * aspect, and distance scales as 1/tan(half),
+   * so the correction is exactly 1/aspect. Applying it as a multiplier rather
+   * than recomputing from scratch keeps the hand-tuned framing of each caller
+   * — including its deliberate slight crop — just measured against the axis
+   * that actually constrains the shot.
+   */
+  private fit(distance: number) {
+    const cam = this.controls?.camera as THREE.PerspectiveCamera | undefined;
+    if (!cam?.isPerspectiveCamera || !(cam.aspect > 0) || cam.aspect >= 1) return distance;
+    return distance / cam.aspect;
+  }
+
+  /**
    * Frame a set of unit-sphere directions.
    *
    * The camera target is always derived from real point positions — never from
@@ -52,7 +74,7 @@ class GlobeCamera {
     let spread = 0.04;
     for (const d of dirs) spread = Math.max(spread, _centroid.angleTo(d));
 
-    const altitude = this.radius * (1.18 + spread * 1.7 + (opts.padding ?? 0));
+    const altitude = this.fit(this.radius * (1.18 + spread * 1.7 + (opts.padding ?? 0)));
     _eye.copy(_centroid).multiplyScalar(altitude);
     _target.set(0, 0, 0);
 
@@ -82,7 +104,7 @@ class GlobeCamera {
 
   async reset(instant = false) {
     if (!this.controls) return;
-    const d = this.radius * 2.6;
+    const d = this.fit(this.radius * 2.6);
     useGlobeStore.getState().setCameraBusy(true);
     try {
       await this.controls.setLookAt(0, d * 0.28, d, 0, 0, 0, !instant);
@@ -98,7 +120,7 @@ class GlobeCamera {
    */
   async establish() {
     if (!this.controls) return;
-    const d = this.radius * 5.4;
+    const d = this.fit(this.radius * 5.4);
     await this.controls.setLookAt(d * 0.34, d * 0.30, d, 0, 0, 0, false);
   }
 
@@ -124,9 +146,14 @@ export function Rig({ radius }: { radius: number }) {
     const c = ref.current;
     globeCamera.controls = c;
 
-    c.minDistance = radius * 1.002; // never let the camera inside the shell
-    c.maxDistance = radius * 6;
-    c.dollySpeed = 0.6;
+    c.minDistance = radius * 1.005; // allow zooming right down to the node clusters
+    c.maxDistance = radius * 14; // allow zooming way out into deep space
+    // A wheel notch delivers far more dolly per event than a pinch does, so one
+    // speed cannot serve both: 0.9 that feels right on a trackpad makes pinch
+    // feel like it barely responds. Coarse pointers only, so the desktop feel
+    // is unchanged.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    c.dollySpeed = coarse ? 2.4 : 0.9;
     c.truckSpeed = 0;
     c.smoothTime = 0.32;
     c.draggingSmoothTime = 0.14;
