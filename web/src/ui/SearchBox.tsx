@@ -54,12 +54,19 @@ export function SearchBox() {
     };
   }, []);
 
-  const { data: results, isLoading } = useQuery({
+  const { data: results, isLoading, isError, error } = useQuery({
     queryKey: ['search', debouncedQuery],
     queryFn: async () => {
       if (!debouncedQuery.trim()) return [];
-      const res = await fetch(`${API}/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`);
-      if (!res.ok) throw new Error('Search failed');
+      // Name the actual failure. A bare "Search failed" hides the difference
+      // between a 500, a CORS rejection and an unreachable host — which are the
+      // three things that actually go wrong here, and they have different fixes.
+      const res = await fetch(`${API}/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`).catch(
+        (e) => {
+          throw new Error(`Cannot reach ${new URL(API).host} (${e?.message ?? 'network error'})`);
+        },
+      );
+      if (!res.ok) throw new Error(`${new URL(API).host} returned HTTP ${res.status}`);
       const rawData = await res.json();
       const mapped: SearchResult[] = rawData.map((item: any) => {
         const repo = item.repo;
@@ -80,6 +87,10 @@ export function SearchBox() {
       return mapped.slice(0, 6);
     },
     enabled: debouncedQuery.trim().length > 0,
+    // Default is 3 retries with backoff, which left a dead API showing
+    // "Searching…" for ~13 seconds before admitting anything was wrong. One
+    // retry still absorbs a single dropped request without hiding an outage.
+    retry: 1,
   });
 
   const onSelect = (repo: SearchResult) => {
@@ -149,10 +160,21 @@ export function SearchBox() {
           onPointerDown={(e) => e.stopPropagation()}
         >
           {isLoading && <div className="search-box__msg" role="status">Searching...</div>}
-          {!isLoading && rows.length === 0 && (
+          {/* A failed request is not an empty result. This used to render "No
+              results found" whether the API returned zero rows or the fetch was
+              blocked by CORS, refused, or 500'd — which makes a broken
+              deployment indistinguishable from an unlucky query, for the user
+              and for anyone debugging it. */}
+          {!isLoading && isError && (
+            <div className="search-box__msg search-box__msg--error" role="alert">
+              Search is unavailable.
+              <span className="muted"> {(error as Error)?.message || 'Request failed'}</span>
+            </div>
+          )}
+          {!isLoading && !isError && rows.length === 0 && (
             <div className="search-box__msg" role="status">No results found</div>
           )}
-          {!isLoading && rows.length > 0 && (
+          {!isLoading && !isError && rows.length > 0 && (
             <ul className="search-box__list" id="search-results" role="listbox">
               {rows.map((r, i) => (
                 <li key={r.id} role="presentation">

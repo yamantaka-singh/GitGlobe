@@ -1190,3 +1190,19 @@ button:focus-visible {
 .app__fallback p:last-child {
   margin-bottom: 0;
 }
+
+/* Error states for data that failed to load. Distinct from empty results so a
+   broken API can never masquerade as a repository with no metadata. */
+.search-box__msg--error,
+.detail-panel__error {
+  color: var(--fail);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-panel__error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 6px;
+}
