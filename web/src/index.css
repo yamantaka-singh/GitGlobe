@@ -1419,3 +1419,40 @@ button:focus-visible {
     background: rgba(110, 139, 232, 0.1);
   }
 }
+
+/* ------------------------------------------- stats panel: compact on mobile */
+
+@media (max-width: 860px) {
+  /* Was full-width and up to 54vh — over half the screen for a diagnostic
+     panel, on top of a globe that is the actual content. The readings are
+     short strings, so the space went to stacked rows and generous padding
+     rather than to information. Two columns and tighter leading fit the same
+     content in roughly a third of the height. */
+  .telemetry {
+    max-height: 38vh;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .telemetry .stats {
+    grid-template-columns: auto 1fr auto 1fr;
+    column-gap: 10px;
+    row-gap: 4px;
+    font-size: 10px;
+  }
+
+  /* PageRank iteration counts and degree percentiles are for us, not for
+     someone on a phone deciding whether the globe is working. */
+  .telemetry .note {
+    display: none;
+  }
+
+  .telemetry .control {
+    font-size: 10px;
+  }
+
+  .telemetry .bench-result {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+}

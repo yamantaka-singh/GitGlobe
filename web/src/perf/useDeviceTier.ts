@@ -11,14 +11,40 @@ import { useGlobeStore, type Tier } from '../store/useGlobeStore';
  * sampler that used to live here was removed rather than tuned. Runtime quality
  * is governed by pixel ratio in `Scene`, which never costs the user any data.
  */
+/**
+ * A phone is not a small desktop.
+ *
+ * It renders the same scene into a display that is often 3x density, on a GPU
+ * with a fraction of the bandwidth and no active cooling — which is why the
+ * report is "low fps *and* the phone gets hot". Both come from the same place:
+ * this scene is fragment-bound, so sustained fill rate is what heats the die.
+ *
+ * The two levers here cost no data. Dropping the pixel-ratio cap from 2.0 to
+ * 1.5 removes 44% of the fragments outright ((1.5/2)² = 0.56), and the ambient
+ * ribbons are large translucent quads that blend over each other — the most
+ * expensive pixels in the frame per unit of meaning. Node count is deliberately
+ * untouched: it stays at the full 198,731.
+ */
+const COARSE =
+  typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches ?? false);
+
 export function TIER_BUDGET(tier: Tier) {
-  return {
+  const budget = {
     // The ambient arc layer is fill-rate bound — ribbons are big translucent
     // quads — so it is the first thing to go on a weak GPU, before point count.
     low: { maxBand: 0, dprCap: 1.0, targetMs: 33, ambientArcs: 0 },
     mid: { maxBand: 1, dprCap: 1.5, targetMs: 20, ambientArcs: 900 },
     high: { maxBand: 2, dprCap: 2.0, targetMs: 16.7, ambientArcs: 2000 },
   }[tier];
+
+  if (!COARSE) return budget;
+  // ponytail: one flat phone profile rather than a per-device table. Revisit
+  // only if a specific handset is measured needing something different.
+  return {
+    ...budget,
+    dprCap: Math.min(budget.dprCap, 1.5),
+    ambientArcs: Math.min(budget.ambientArcs, 800),
+  };
 }
 
 export function detectTier(gl: THREE.WebGLRenderer): Tier {
