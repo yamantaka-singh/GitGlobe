@@ -43,6 +43,7 @@ const VERTEX_COMMON = /* glsl */ `
     float facing;
     float size;
     vec3  dir;      // unit direction on the sphere, for sun-side shading
+    float fade;     // <1 when the point wanted to be smaller than one pixel
   };
 
   Placed placePoint() {
@@ -73,7 +74,20 @@ const VERTEX_COMMON = /* glsl */ `
     vec4 mv = viewMatrix * vec4(worldPos, 1.0);
 
     // Perspective-correct: -mv.z is view-space depth.
-    p.pointSize = clamp(p.size * uSizeScale * uPixelRatio / max(-mv.z, 0.001), 1.0, 72.0);
+    float ideal = p.size * uSizeScale * uPixelRatio / max(-mv.z, 0.001);
+    p.pointSize = clamp(ideal, 1.0, 72.0);
+
+    // A point cannot be drawn smaller than one pixel, but pinning it there at
+    // full brightness is what makes the field twinkle when the globe is zoomed
+    // out or turning: every sub-pixel node keeps its full intensity while its
+    // centre crosses the pixel grid, so the rasteriser flickers it on and off.
+    //
+    // Carrying the shortfall into alpha instead is the standard fix — the point
+    // stays one pixel wide but dims by the area it was denied, so shrinking past
+    // a pixel fades smoothly rather than scintillating. Squared because the
+    // shortfall is a length and coverage goes as area.
+    float shortfall = clamp(ideal, 0.0, 1.0);
+    p.fade = shortfall * shortfall;
     p.clip = projectionMatrix * mv;
     return p;
   }
@@ -129,7 +143,7 @@ ${VERTEX_COMMON}
     float night = smoothstep(-0.4, 0.5, dot(p.dir, normalize(uSunDir)));
     dim *= mix(uNightDim, 1.0, night);
 
-    vAlpha = limb * dim;
+    vAlpha = limb * dim * p.fade;
     vHover = step(abs(aIndex - uHoverIndex), 0.5);
 
     if (vHover > 0.5) {
