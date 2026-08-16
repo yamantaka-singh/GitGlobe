@@ -12,6 +12,9 @@ const DEV = import.meta.env.DEV;
 // Set to true when performance debugging is needed
 const SHOW_PERF = false;
 
+/** Automatic rebuilds allowed after a lost WebGL context, before giving up. */
+const MAX_GL_RECOVERIES = 2;
+
 /**
  * Renderer config is a decision, not a default (web3d-scene-architect Rule 3):
  *
@@ -49,6 +52,13 @@ export function App() {
   const [visible, setVisible] = useState(true);
   const [webgl] = useState(hasWebGL);
   const [contextLost, setContextLost] = useState(false);
+  // Bumping this remounts the canvas, which is what actually rebuilds the GPU
+  // resources a context loss destroyed.
+  const [glKey, setGlKey] = useState(0);
+  // If the context keeps dying the device is genuinely out of memory, and
+  // rebuilding 198,731 points on every restore would just lose it again in a
+  // loop. After a couple of attempts, stop and leave the notice up.
+  const recoveries = useRef(0);
 
   // Stop rendering when the canvas is off-screen or the tab is backgrounded.
   // Free performance, and the difference between a page that drains a laptop
@@ -87,6 +97,7 @@ export function App() {
   return (
     <div className="app" ref={wrapper}>
       <Canvas
+        key={glKey}
         frameloop={visible ? 'always' : 'never'}
         dpr={[1, 2]}
         gl={{
@@ -118,11 +129,34 @@ export function App() {
           // the DOM, so hide the canvas rather than announcing a black box.
           canvas.setAttribute('aria-hidden', 'true');
 
+          // Disposing the previous renderer during a remount fires
+          // `webglcontextlost` on the canvas being thrown away. That event is
+          // about a dead element, not the live one, and acting on it put the
+          // notice straight back up over a scene that had already recovered.
+          const isStale = () => !canvas.isConnected;
+
           const onLost = (e: Event) => {
             e.preventDefault();
+            if (isStale()) return;
             setContextLost(true);
           };
-          const onRestored = () => setContextLost(false);
+
+          // Restoring the context is not the same as restoring the scene.
+          //
+          // Losing the context destroys every GPU resource with it — the point
+          // buffers, the baked planet texture, the compiled shaders. three.js
+          // does not re-upload them for an existing scene graph, so clearing
+          // the overlay on `webglcontextrestored` only revealed an empty globe
+          // and the message's "reload the page" was the sole real cure.
+          // Remounting the canvas rebuilds all of it, which is the reload,
+          // minus the user having to know to do it.
+          const onRestored = () => {
+            if (isStale()) return;
+            if (recoveries.current >= MAX_GL_RECOVERIES) return; // leave the notice up
+            recoveries.current += 1;
+            setContextLost(false);
+            setGlKey((k) => k + 1);
+          };
           canvas.addEventListener('webglcontextlost', onLost);
           canvas.addEventListener('webglcontextrestored', onRestored);
         }}
