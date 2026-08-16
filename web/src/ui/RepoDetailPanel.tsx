@@ -50,6 +50,17 @@ export function RepoDetailPanel() {
 
   const [showList, setShowList] = useState<'dependents' | 'dependencies' | 'alternatives' | null>(null);
 
+  /**
+   * On a phone the panel is a bottom sheet capped at 50vh — half the screen —
+   * and selecting a node flies it to the centre, i.e. directly behind the
+   * sheet. You could not see the thing you had just tapped. It now opens as a
+   * peek showing name, stars and language, and expands on demand. Desktop is
+   * unaffected: there the panel is a side rail and covers nothing.
+   */
+  const [expanded, setExpanded] = useState(
+    () => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 860px)').matches),
+  );
+
   const { data: graphData, isLoading: isGraphLoading } = useQuery({
     queryKey: ['graph', repoId, tileName, selectedId],
     queryFn: async () => {
@@ -65,6 +76,7 @@ export function RepoDetailPanel() {
 
   useEffect(() => {
     setShowList(null);
+    if (window.matchMedia?.('(max-width: 860px)').matches) setExpanded(false);
   }, [selectedId]);
 
   // ---- early exits (after all hooks) ----------------------------------------
@@ -143,7 +155,7 @@ export function RepoDetailPanel() {
 
   return (
     <motion.div 
-      className="detail-panel" 
+      className={`detail-panel${expanded ? "" : " detail-panel--peek"}`} 
       role="dialog" 
       aria-label="Repository Details"
       initial={{ opacity: 0, y: 40, scale: 0.95 }}
@@ -164,6 +176,7 @@ export function RepoDetailPanel() {
       </div>
       <div className="detail-panel__org">{identity.org}</div>
 
+
       {isError && (
         <p className="detail-panel__error" role="alert">
           Couldn't load this repository's details.
@@ -183,6 +196,14 @@ export function RepoDetailPanel() {
           {language}
         </span>
       </div>
+
+      <button
+        className="detail-panel__expand"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        {expanded ? 'Less ▲' : 'More ▼'}
+      </button>
 
       <dl className="detail-panel__stats">
         <dt>Domain</dt>
