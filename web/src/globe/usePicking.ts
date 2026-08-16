@@ -9,6 +9,21 @@ import { useGlobeStore } from '../store/useGlobeStore';
 const PICK_INTERVAL_MS = 33; // ~30Hz, per the architecture's picking budget
 
 /**
+ * Half-width of the pick window, in CSS pixels.
+ *
+ * This used to read a single pixel. A mouse cursor is a single pixel, so that
+ * was fine; a fingertip is about 44, and a node is a couple of pixels wide, so
+ * tapping one was largely luck — the single most common complaint about the
+ * globe on a phone. Sampling a square around the touch and taking the nearest
+ * hit gives the finger a tolerance without moving anything on screen.
+ *
+ * Coarse pointers get a much larger window than a mouse, where a wide radius
+ * would make hover feel magnetic and the reticle jumpy.
+ */
+const PICK_RADIUS = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches ? 7 : 2;
+const PICK_SIZE = PICK_RADIUS * 2 + 1;
+
+/**
  * GPU picking.
  *
  * Raycasting a million points is not an option, so instead we render the point
@@ -31,7 +46,7 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
 
   const target = useMemo(
     () =>
-      new THREE.WebGLRenderTarget(1, 1, {
+      new THREE.WebGLRenderTarget(PICK_SIZE, PICK_SIZE, {
         minFilter: THREE.NearestFilter,
         magFilter: THREE.NearestFilter,
         format: THREE.RGBAFormat,
@@ -41,7 +56,21 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
       }),
     [],
   );
-  const readback = useMemo(() => new Uint8Array(4), []);
+  const readback = useMemo(() => new Uint8Array(PICK_SIZE * PICK_SIZE * 4), []);
+  // Offsets into the pick window ordered by distance from its centre, so the
+  // first hit found is the node nearest the finger. Built once.
+  const scanOrder = useMemo(() => {
+    const out: number[] = [];
+    for (let y = 0; y < PICK_SIZE; y++) {
+      for (let x = 0; x < PICK_SIZE; x++) out.push(y * PICK_SIZE + x);
+    }
+    const c = PICK_RADIUS;
+    return out.sort((a, b) => {
+      const ax = (a % PICK_SIZE) - c, ay = Math.floor(a / PICK_SIZE) - c;
+      const bx = (b % PICK_SIZE) - c, by = Math.floor(b / PICK_SIZE) - c;
+      return ax * ax + ay * ay - (bx * bx + by * by);
+    });
+  }, []);
   const savedClear = useMemo(() => new THREE.Color(), []);
 
   useEffect(() => () => target.dispose(), [target]);
@@ -115,7 +144,11 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
     // scenes, because an Object3D can only have one parent.
     for (const c of clouds) c.points.material = c.pickMaterial;
 
-    cam.setViewOffset(Math.round(rect.width), Math.round(rect.height), x, y, 1, 1);
+    // Sample a square centred on the pointer rather than the single pixel under
+    // it. Clamped so the window never starts off-canvas near an edge.
+    const ox = Math.max(0, Math.min(Math.round(rect.width) - PICK_SIZE, x - PICK_RADIUS));
+    const oy = Math.max(0, Math.min(Math.round(rect.height) - PICK_SIZE, y - PICK_RADIUS));
+    cam.setViewOffset(Math.round(rect.width), Math.round(rect.height), ox, oy, PICK_SIZE, PICK_SIZE);
     cam.layers.set(PICK_LAYER);
 
     gl.getClearColor(savedClear);
@@ -125,7 +158,7 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
     gl.setClearColor(0x000000, 1);
     gl.clear(true, true, false);
     gl.render(scene, cam);
-    gl.readRenderTargetPixels(target, 0, 0, 1, 1, readback);
+    gl.readRenderTargetPixels(target, 0, 0, PICK_SIZE, PICK_SIZE, readback);
 
     gl.setRenderTarget(prevTarget);
     gl.setClearColor(savedClear, prevClearAlpha);
@@ -133,7 +166,13 @@ export function usePicking(clouds: readonly PointCloudHandle[], enabled: boolean
     cam.layers.mask = prevLayerMask;
     for (const c of clouds) c.points.material = c.displayMaterial;
 
-    const id = readback[0] + readback[1] * 256 + readback[2] * 65536;
+    // Nearest hit to the centre of the window wins.
+    let id = 0;
+    for (const px of scanOrder) {
+      const o = px * 4;
+      const v = readback[o] + readback[o + 1] * 256 + readback[o + 2] * 65536;
+      if (v !== 0) { id = v; break; }
+    }
     setHovered(id === 0 ? -1 : id - 1);
   });
 

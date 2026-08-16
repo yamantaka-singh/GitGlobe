@@ -19,6 +19,9 @@ const _eye = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
+/** Rotate speed at the default framing; scaled down as the camera closes in. */
+const BASE_ROTATE_SPEED = 0.55;
+
 export interface FlyToOptions {
   /** Extra padding on the framing, as a multiple of globe radius. */
   padding?: number;
@@ -201,8 +204,9 @@ export function Rig({ radius }: { radius: number }) {
     c.truckSpeed = 0;
     c.smoothTime = 0.32;
     c.draggingSmoothTime = 0.14;
-    c.azimuthRotateSpeed = 0.55;
-    c.polarRotateSpeed = 0.55;
+    // Actual values are set per-frame below, scaled by distance.
+    c.azimuthRotateSpeed = BASE_ROTATE_SPEED;
+    c.polarRotateSpeed = BASE_ROTATE_SPEED;
     // The globe stays centred: panning it off-axis makes the sphere metaphor
     // fall apart and there is no way back without a reset.
     c.mouseButtons.left = CameraControlsImpl.ACTION.ROTATE;
@@ -222,12 +226,31 @@ export function Rig({ radius }: { radius: number }) {
     };
   }, [radius, invalidate]);
 
+  // Rotation speed has to fall as the camera approaches the surface.
+  //
+  // `azimuthRotateSpeed` is an angular rate, so one finger-width of drag turns
+  // the globe by the same number of degrees at every distance. Far out that is
+  // a gentle nudge; pressed up against the cloud the same drag sweeps the
+  // entire visible surface past you, which is the "movement becomes overly
+  // sensitive when zoomed in" complaint. Scaling by how far the camera sits
+  // between the surface and the default framing keeps the *apparent* speed of
+  // the points roughly constant instead.
   useFrame((_, delta) => {
+    const c = ref.current;
+    if (!c) return;
+
+    const span = Math.max(radius * 1.6, 1e-3); // surface -> default framing
+    const t = THREE.MathUtils.clamp((c.distance - radius) / span, 0, 1);
+    // Never reaches zero: at full zoom the globe must still be draggable.
+    const scale = 0.18 + 0.82 * t;
+    c.azimuthRotateSpeed = BASE_ROTATE_SPEED * scale;
+    c.polarRotateSpeed = BASE_ROTATE_SPEED * scale;
+
     const { autoRotate, cameraBusy, reducedMotion, hoveredId, selectedId } = useGlobeStore.getState();
     if (!autoRotate || cameraBusy || reducedMotion || hoveredId >= 0 || selectedId >= 0) return;
 
     // Decreased rotation speed as requested
-    ref.current?.rotate(delta * 0.0035, 0, false);
+    c.rotate(delta * 0.0035, 0, false);
   });
 
   return <CameraControls ref={ref} makeDefault />;

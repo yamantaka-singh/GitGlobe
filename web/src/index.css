@@ -1371,3 +1371,51 @@ button:focus-visible {
     height: 34px;
   }
 }
+
+/* ------------------------------------------------- detail panel: mobile peek */
+
+/* Desktop keeps the full panel — it is a side rail there and hides nothing. */
+.detail-panel__expand {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  /* The sheet opens as a peek: name, org, stars, language. Everything else is
+     one tap away. Selecting a node flies it to the centre of the screen, so a
+     half-height sheet was landing directly on top of the thing just tapped. */
+  .detail-panel--peek .detail-panel__desc,
+  .detail-panel--peek .detail-panel__stats,
+  .detail-panel--peek .detail-panel__link,
+  .detail-panel--peek .detail-panel__list-container {
+    display: none;
+  }
+
+  .detail-panel--peek {
+    max-height: none;
+    gap: 10px;
+    padding-bottom: 16px;
+  }
+
+  .detail-panel__expand {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    /* 44px target — this is the control that reveals the whole panel. */
+    min-height: 44px;
+    padding: 11px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    transition: color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+      background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .detail-panel__expand:hover {
+    color: var(--text);
+    background: rgba(110, 139, 232, 0.1);
+  }
+}
