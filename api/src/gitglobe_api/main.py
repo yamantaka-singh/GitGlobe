@@ -72,6 +72,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def cache_control(request, call_next):
+    """Say what is cacheable. Every response used to leave it unstated.
+
+    A response with no `Cache-Control` has no explicit freshness lifetime, and
+    RFC 9111 lets a browser or any intermediate proxy apply its own heuristic —
+    so a reply could be reused for an unspecified period with nothing here
+    asking for it. The failure that produces is nasty: once a client has stored
+    an error or an empty result, it keeps serving it, the page looks broken,
+    and only a private window (a fresh cache) appears to fix it.
+
+    Successful reads are cheap and change rarely, so they get a short shared
+    lifetime with `stale-while-revalidate` to keep navigation snappy. Anything
+    that is not a success gets `no-store`, so a bad minute can never be
+    remembered as a bad hour.
+    """
+    response = await call_next(request)
+    if "cache-control" not in response.headers:
+        if 200 <= response.status_code < 300:
+            response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+        else:
+            response.headers["Cache-Control"] = "no-store"
+    return response
+
 # ----------------- Models -----------------
 class RepoMetadata(BaseModel):
     id: int
