@@ -2,15 +2,12 @@
 
 ![Status](https://img.shields.io/badge/Status-Shipped-success?style=for-the-badge)
 ![Tech](https://img.shields.io/badge/WebGL-Three.js-black?style=for-the-badge&logo=three.js)
-![Tech](https://img.shields.io/badge/Agent-Claude_Sonnet_4.5-coral?style=for-the-badge&logo=anthropic)
 ![Data](https://img.shields.io/badge/Nodes-198%2C731-blue?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-506_across_19_suites-green?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-506_across_24_suites-green?style=for-the-badge)
 
-**A 3D interactive globe of the open-source universe.** 198,731 repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, zooming, and talking to an AI that flies the camera for you.
+**A 3D interactive globe of the open-source universe.** 198,731 repositories placed on a sphere by what they *do*, not what they're called — navigable by dragging, pinching, and tapping, with search and per-domain filters that fly the camera there for you.
 
 Every repository carries a **measured global rank** — its position among all ~420M public repositories, from an empirically sampled star distribution rather than an assumed power law — and a **quality score** distilled from an LLM into a gradient-boosted regressor that is never shown a star count.
-
-> "Show me lightweight C++ web servers with minimal dependencies" → the globe spins, zooms into the systems-programming continent, and lights up a cluster of eleven repositories you'd never have found through search.
 
 <div align="center">
   <img src="./design-system/gitglobe/assets/hero-placeholder.png" alt="GitGlobe Demo" width="100%" />
@@ -50,42 +47,39 @@ flowchart TD
     Embed["Embed"] --> UMAP
     UMAP["Spherical UMAP"] --> Tile
     Tile["Tile & Quantize"] --> WebGL
-    WebGL["WebGL Globe"] --> Agent
-    Agent["Agent Camera"]
+    WebGL["WebGL Globe"]
     
     classDef step fill:#161b22,stroke:#30363d,stroke-width:2px,color:#c9d1d9,rx:8px,ry:8px
     classDef desc fill:none,stroke:none,color:#8b949e
     
-    class Ingest,Embed,UMAP,Tile,WebGL,Agent step
+    class Ingest,Embed,UMAP,Tile,WebGL step
     
     IngestDesc["README stripped of badges/boilerplate → capability text"]:::desc
-    EmbedDesc["voyage-3-large → 1024-d, Matryoshka-truncated to 512"]:::desc
+    EmbedDesc["Vertex AI gemini-embedding-001 → 768-d, Matryoshka-truncated"]:::desc
     UMAPDesc["output_metric='haversine' → (lat, lon) directly on S²"]:::desc
-    TileDesc["S2 cells → 4-byte-per-point binary tiles on a CDN"]:::desc
-    WebGLDesc["one draw call, GPU picking, arc overlays"]:::desc
-    AgentDesc["Claude emits repo IDs; client resolves to coordinates"]:::desc
+    TileDesc["S2 cells → quantized binary tiles, served static"]:::desc
+    WebGLDesc["one draw call per LOD band, GPU picking, arc overlays"]:::desc
     
     Ingest -.-> IngestDesc
     Embed -.-> EmbedDesc
     UMAP -.-> UMAPDesc
     Tile -.-> TileDesc
     WebGL -.-> WebGLDesc
-    Agent -.-> AgentDesc
 ```
 
-Four ideas do the heavy lifting:
+Five ideas do the heavy lifting:
 
 **1. Semantic proximity over tags.** Topic tags are sparse, inconsistent, and self-reported. Embedding the actual README — after stripping the badge soup — captures what a project *does*.
 
 **2. Native spherical projection.** Most projects run UMAP into 3D and then normalize onto a sphere. That's wrong: it throws away the radial dimension after the algorithm has already spent it. GitGlobe uses UMAP's `output_metric="haversine"`, which optimizes the layout *on the sphere's surface* from the start. No distortion, no wasted dimension. See [ADR-002](docs/ARCHITECTURE.md#adr-002-spherical-projection-method).
 
-**3. The LLM never invents coordinates.** An agent that outputs `fly_to(lat: 42.1, lon: -80.3)` will hallucinate. GitGlobe's agent outputs *repository IDs*; the client looks up their real positions and computes the camera target. The model reasons about software; the renderer owns geometry. See [ADR-006](docs/ARCHITECTURE.md#adr-006-agent-camera-control-protocol).
+**3. The camera never takes a raw coordinate from outside the renderer.** Search results and domain filters resolve to real point positions and hand `globeCamera` a set of directions to frame — never a caller-supplied lat/lon. That's the same contract an agent would need if one were wired up to fly the camera: it would emit repository IDs, not coordinates, so it structurally cannot hallucinate a position. See [ADR-006](docs/ARCHITECTURE.md#adr-006-agent-camera-control-protocol).
 
-**4. Edges are demand-loaded.** 198k nodes carry 234,640 CSR entries, and drawing them all is neither possible nor useful — it's a hairball. Arcs appear only for the focused node's neighborhood, capped at ~2,000.
+**4. Edges are demand-loaded.** 198k nodes carry 206,247 directed edges, and drawing them all is neither possible nor useful — it's a hairball. A low-density "backbone" web (a few hundred to two thousand ambient arcs, tuned down further on touch devices) hints at structure at rest; a node's full neighborhood only lights up once it's focused.
 
 **5. The ranking model is blindfolded to popularity.** An LLM teacher rates a stratified sample of repositories against a six-dimension rubric; a gradient-boosted regressor written from scratch in NumPy distils those judgements to the whole corpus. Star and fork counts are stripped from both the teacher's prompt and the student's features, enforced by tests — without that, the model just relearns stars under a new name. A dimension is only stored if its held-out RMSE beats predicting the mean by more than sampling noise.
 
-**6. Rank is measured, not modelled.** GitHub's search API reports exact counts, so walking a 29-rung star ladder yields the empirical survival function over ~322M repositories. A repository's rank is its position among *all* public repositories, not among the ones this corpus happens to hold — which would flatter every result by two orders of magnitude.
+**6. Rank is measured, not modelled.** GitHub's search API reports exact counts, so walking a star ladder yields the empirical survival function over hundreds of millions of repositories. A repository's rank is its position among *all* public repositories, not among the ones this corpus happens to hold — which would flatter every result by orders of magnitude.
 
 ---
 
@@ -93,30 +87,31 @@ Four ideas do the heavy lifting:
 
 | Layer | Choice | Why |
 |---|---|---|
-| **Renderer** | three.js + React Three Fiber | Full shader control; needed for a single-draw-call 1M-point globe with custom glow. |
+| **Renderer** | three.js + React Three Fiber | Full shader control; a single draw call per LOD band for a 198k-point globe with custom glow. |
 | **Camera** | `camera-controls` (yomotsu) | Promise-based `.setLookAt(..., enableTransition)` — purpose-built for scripted fly-to. |
-| **Frontend** | React 19 + TypeScript + Vite + Tailwind + Zustand | Fast HMR against a heavy WebGL scene; Zustand keeps camera state out of React's render path. |
-| **API** | FastAPI (Python 3.12) + Pydantic | Same language as the ML pipeline; no model-serving bridge. |
-| **Vector search** | Qdrant | Scalar quantization + HNSW keeps 1M×512 vectors in ~1GB RAM with sub-20ms p99. |
-| **Metadata** | Postgres 16 + `pg_trgm` | Repo rows, adjacency lists, cluster labels; BM25-ish lexical half of hybrid search. |
-| **Embeddings** | Voyage `voyage-3-large` | Matryoshka-truncatable; strong on technical prose. `voyage-code-3` for code-heavy repos. |
-| **Agent** | Claude Sonnet 4.5 via Vercel AI SDK | Streams text and tool calls in one channel, which is exactly the "talk while flying" UX. |
-| **Reduction** | RAPIDS cuML UMAP | 1M×512 in ~8 min on one L4 vs ~4h on CPU. |
-| **Pipeline** | Prefect + Polars + DuckDB, GPU steps on Modal | Serverless GPU means you pay for 8 minutes, not a month. |
-| **Tiles** | Cloudflare R2 + CDN | Static binary blobs; zero egress fees. |
+| **Frontend** | React 19 + TypeScript + Vite + Zustand + TanStack Query | Fast HMR against a heavy WebGL scene; Zustand keeps camera state out of React's render path; Query owns the repo-detail and search fetches. |
+| **API** | FastAPI (Python) + Pydantic | Same language as the ML pipeline; no model-serving bridge. |
+| **Vector search** | Qdrant | Scalar quantization + HNSW over the corpus's 768-d vectors. |
+| **Metadata** | Postgres (asyncpg) | Repo rows, adjacency lists, cluster labels; a lexical `ILIKE` fallback when semantic search has no client configured. |
+| **Embeddings** | Vertex AI `gemini-embedding-001` | Matryoshka-trained — truncating to 768-d costs ~0.26% quality for a quarter of the storage a 3072-d vector would need. |
+| **Reduction** | `umap-learn` (CPU) | `output_metric="haversine"` isn't exposed by every accelerated UMAP implementation, so this stays a portable CPU stage rather than something the ingest step has to import. |
+| **Pipeline orchestration** | Prefect | A single `gitglobe <subcommand>` CLI (ingest, clean, embed, project, cluster, edges, rank, build) rather than one monolithic run. |
+| **Tiles** | Static binary blobs | S2-binned, quantized, served alongside the web app — no separate tile server. |
 
 Full library-by-library breakdown with versions and rationale: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md#library-reference).
 
+> **A live inconsistency, not a documentation gap:** the corpus was embedded with Vertex AI (768-d), but `/search` in the API embeds the *query* with Voyage (`voyage-2`) when `VOYAGE_API_KEY` is set — two different vector spaces, so any cosine similarity between them is meaningless. In the current deployment that key is unset, so every request takes the Postgres `ILIKE` fallback, which is why this hasn't surfaced as visibly broken rankings. Re-pointing the query-time embed call at Vertex (or re-embedding the corpus with Voyage) is the fix; tracked here rather than silently patched.
+
 ---
 
-## Key Engineering Challenges (Learnings)
+## Key engineering challenges
 
-This project was built to push the limits of what a browser can render while maintaining a 60fps budget. As a portfolio piece, it tackles several non-trivial engineering problems:
+This project pushes what a browser can render while holding a 60fps budget. A few of the non-trivial problems it had to solve:
 
-- **Raw WebGL Shader Optimization:** Passing 40,000+ nodes to a single `THREE.Points` draw call required writing custom GLSL vertex and fragment shaders. We encountered and solved cross-platform GPU precision issues (e.g., `highp` mismatches between varying uniforms) and handled mathematical edge cases in `smoothstep` that would otherwise discard pixels on stricter drivers.
-- **Dynamic Spherical Geometry:** Rendering flowing dependencies as 3D Bezier curves wrapped around a sphere. Edges are demand-loaded and directional (dependencies vs. dependents are visually distinct using animated arrowheads and dashing), avoiding the visual clutter of a traditional "hairball" graph.
-- **Vector Space to Spherical Coordinates:** Bypassing the standard 3D UMAP distortion by using `output_metric="haversine"` to natively project 512-dimensional embeddings directly onto the surface of a sphere ($S^2$). 
-- **Agentic Camera Control:** Instead of letting the LLM hallucinate 3D coordinates, the AI agent streams repository IDs. The client resolves these to spatial clusters and smoothly flies the camera to the correct continent using a custom spherical interpolation rig.
+- **Raw WebGL shader work.** Hundreds of thousands of points through a single `THREE.Points` draw call per LOD band required custom GLSL. Two examples from this codebase specifically: a GPU-picking pass that samples a small window around the pointer (not a single pixel) so a touch target isn't luck-of-the-pixel on a phone, and a sub-pixel fade that carries a point's below-one-pixel size into alpha instead of pinning it to 1px at full brightness — the pinned version is what made the whole field visibly twinkle as the globe rotated or zoomed.
+- **Dynamic spherical geometry.** Dependency and similarity edges render as great-circle arcs across the sphere's surface, demand-loaded per focused node rather than drawn in bulk, to avoid the visual clutter of a hairball graph.
+- **Vector space to spherical coordinates.** Bypassing the standard 3D-then-normalize UMAP distortion by using `output_metric="haversine"` to project embeddings natively onto the surface of a sphere ($S^2$).
+- **A phone is not a small desktop.** The scene is fragment-bound, not geometry-bound, so the levers that matter on mobile are pixel ratio and translucent overdraw — not node count. Device tier now governs those two continuously (via a runtime fill-rate monitor) rather than dropping LOD bands, which used to make the visible corpus size swing between roughly 2%, 20%, and 100% of the data depending on whether a frame-time sample happened to land during tile upload or a backgrounded tab.
 
 ---
 
@@ -126,66 +121,86 @@ These are the numbers the architecture is designed around. If a design choice br
 
 | Metric | Target | How |
 |---|---|---|
-| Points rendered | 1,000,000 | Single `THREE.Points`, positions as 2×`int16` lat/lon, xyz reconstructed in the vertex shader |
-| Position payload | **4 MB** | 1M × 4 bytes; full per-point record with stars, colour, and ID is ~12 bytes → 12 MB |
-| Time to first paint | < 2.5 s | Top-20k-by-stars tile loads first; remainder streams by visible S2 cell |
-| Frame time | < 16 ms | One draw call, back-hemisphere culled in the vertex shader |
-| Hover pick | < 1 frame | GPU picking into a 1×1 scissored render target |
-| Semantic query p99 | < 200 ms | Qdrant HNSW + scalar quantization, `ef=64` |
-| Arcs on screen | ≤ 2,000 | Demand-loaded per focused node |
+| Points rendered | 1,000,000 (currently 198,731) | LOD bands, positions quantized to 2×`int16` lat/lon, xyz reconstructed in the vertex shader |
+| Frame time | < 16.7 ms | One draw call per band, back-hemisphere culled in the vertex shader |
+| Hover / tap pick | < 1 frame | GPU picking into a small render target, nearest-hit search within it |
+| Semantic query p99 | < 200 ms | Qdrant HNSW + scalar quantization |
+| Ambient arcs on screen | ≤ 2,000 (≤ 800 on touch) | A low-density backbone at rest; a node's full neighborhood only on focus |
+
+Scaling to the full 1,000,000-point target is open work — see Roadmap.
 
 ---
 
 ## Repository layout
 
 ```
-gitglobe/
-├── pipeline/                  # Python — offline, runs nightly
-│   ├── ingest/                # GH Archive, GitHub GraphQL, deps.dev, ecosyste.ms
-│   ├── clean/                 # README → capability text (badge/TOC/license stripping)
-│   ├── embed/                 # Voyage batching, caching, retry
-│   ├── project/               # cuML UMAP (haversine) + parametric encoder for new repos
-│   ├── cluster/               # HDBSCAN → LLM-named nebulae
-│   └── tile/                  # S2 cell binning → quantized .bin tiles
-├── api/                       # FastAPI
-│   ├── search/                # hybrid dense + lexical, RRF fusion, reranking
-│   ├── graph/                 # k-hop neighborhood for arc rendering
-│   └── agent/                 # tool definitions, SSE streaming loop
-├── web/                       # React + R3F
-│   ├── globe/                 # renderer, shaders, LOD, GPU picking
-│   ├── arcs/                  # great-circle bezier edge layer
-│   ├── chat/                  # streaming chat, tool-call → camera dispatch
-│   └── store/                 # Zustand: camera, selection, filters
-├── infra/                     # Terraform / Modal / migrations
+GitGlobe/
+├── pipeline/                       # Python — offline corpus build
+│   └── src/gitglobe/
+│       ├── ingest/                 # GitHub GraphQL, BigQuery (GH Archive), criticality
+│       ├── clean/                  # README → capability text
+│       ├── embed/                  # Vertex AI gemini-embedding-001, whitening
+│       ├── project/                # UMAP (haversine) + clustering into domains
+│       ├── graph/                  # co-occurrence, PageRank, community stability
+│       ├── rank/                   # measured global percentile, criticality blend
+│       ├── brain/                  # LLM teacher → GBM student quality score
+│       ├── tiles/                  # S2 binning → quantized binary tiles + manifest
+│       ├── checks/                 # neighbourhood sanity checks
+│       ├── cli.py                  # `gitglobe <subcommand>` entry point
+│       └── flow.py                 # Prefect orchestration
+├── api/                             # FastAPI
+│   └── src/gitglobe_api/
+│       ├── main.py                 # /search, /repo/{id}, /graph/{id}
+│       └── seed_qdrant.py          # loads embeddings from Postgres into Qdrant
+├── web/                             # React + React Three Fiber
+│   └── src/
+│       ├── globe/                  # renderer, shaders, LOD bands, GPU picking
+│       ├── camera/                 # the one class allowed to touch the camera
+│       ├── graph/                  # client-side pagerank/format helpers
+│       ├── tile/                   # binary tile loader + format
+│       ├── repo/                   # name/identity resolution, scoring display
+│       ├── perf/                   # device tier detection
+│       ├── bench/                  # in-app frame-budget benchmark
+│       ├── store/                  # Zustand: camera, selection, filters, tier
+│       └── ui/                     # HUD, search, detail panel, tutorial
 └── docs/
-    ├── ARCHITECTURE.md        # system design + ADRs
-    └── IMPLEMENTATION_PLAN.md # phased build plan, skills, libraries
+    ├── ARCHITECTURE.md             # system design + ADRs
+    └── IMPLEMENTATION_PLAN.md      # phased build plan, skills, libraries
 ```
+
+`docker-compose.yml` for local Postgres/Qdrant/Redis lives in `pipeline/`, not a separate `infra/` directory.
 
 ---
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/<you>/gitglobe && cd gitglobe
-
-# --- pipeline ---
-cd pipeline
-uv venv && uv pip install -e ".[dev]"
-cp .env.example .env          # GITHUB_TOKEN, VOYAGE_API_KEY, ANTHROPIC_API_KEY
-python -m pipeline.run --sample 5000     # small end-to-end slice, CPU-only
+git clone https://github.com/yamantaka-singh/GitGlobe && cd GitGlobe
 
 # --- services ---
-cd ../infra && docker compose up -d      # postgres + qdrant
+cd pipeline && docker compose up -d      # postgres + qdrant + redis
+
+# --- pipeline (each stage is its own subcommand) ---
+uv venv && uv pip install -e ".[dev]"
+# .env in this directory needs GITHUB_TOKEN, GCP credentials for Vertex AI,
+# and DATABASE_URL — see settings.py for the full list, loaded via a small
+# hand-rolled .env reader rather than python-dotenv.
+uv run gitglobe ingest
+uv run gitglobe embed      # costs money — Vertex AI billing
+uv run gitglobe project    # UMAP, CPU, slow
+uv run gitglobe cluster
+uv run gitglobe edges
+uv run gitglobe rank
+uv run gitglobe build      # writes tiles + manifest for the web app
 
 # --- api ---
 cd ../api && uv run fastapi dev
 
 # --- web ---
-cd ../web && pnpm install && pnpm dev
+cd ../web && npm install && npm run dev
 ```
 
-`--sample 5000` runs the whole pipeline on CPU in a few minutes so you can see a globe before committing to GPU infrastructure. The full 1M run is `python -m pipeline.run --full --gpu`.
+`gitglobe doctor` runs a full diagnostic (env, shard state, distribution, verdict) if a stage looks stuck; `gitglobe status` reports what's embedded, projected, and clustered so far.
 
 ---
 
@@ -199,21 +214,21 @@ cd ../web && pnpm install && pnpm dev
 | **ecosyste.ms** | Repo + package metadata, funding | Free REST | Excellent fallback and cross-registry reconciliation |
 | **OSSF Criticality Score** | Project importance | Free dataset | Better node-size signal than stars alone |
 
-Star count is a popularity proxy that heavily favours old repos. Node radius should blend stars, recent commit activity, and criticality score — see [ADR-008](docs/ARCHITECTURE.md#adr-008-node-size-signal).
+Star count is a popularity proxy that heavily favours old repos. Node radius blends stars, recent activity, and criticality score — see [ADR-008](docs/ARCHITECTURE.md#adr-008-node-size-signal).
 
 ---
 
 ## Roadmap
 
 - [x] Concept and spatial pipeline sketch
-- [x] **Phase 0** — Render 1M synthetic points at 60fps *(de-risks everything else)*
-- [x] **Phase 1** — Ingest 100k real repos, cleaned and enriched
+- [x] **Phase 0** — Render a synthetic point field at 60fps *(de-risks everything else)*
+- [x] **Phase 1** — Ingest real repos, cleaned and enriched
 - [x] **Phase 2** — Embed + spherical UMAP + S2 tiling
-- [x] **Phase 3** — Real data on the globe, hover/click, GPU picking
-- [x] **Phase 4** — Hybrid search API with reranking
-- [x] **Phase 5** — Agent camera control, streaming
-- [x] **Phase 6** — Dependency and semantic arcs (moving arrowheads, backbone web)
-- [ ] **Phase 7** — Scale to 1M, nebula labels, share-a-view URLs, deploy
+- [x] **Phase 3** — Real data on the globe, hover/tap, GPU picking, mobile input tuning
+- [x] **Phase 4** — Hybrid search API with reranking (currently degraded — see the Stack note on the embedding-space mismatch)
+- [ ] **Phase 5** — Wire an agent to the existing ID-based camera-control API; nothing calls it yet
+- [x] **Phase 6** — Dependency and semantic arcs (directional, demand-loaded backbone web)
+- [ ] **Phase 7** — Scale to 1,000,000 points, nebula labels, share-a-view URLs
 
 Detailed tasks and exit criteria per phase: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
@@ -223,14 +238,13 @@ Detailed tasks and exit criteria per phase: [docs/IMPLEMENTATION_PLAN.md](docs/I
 
 Worth stating up front, because they shape the product.
 
-- **A sphere's surface is two-dimensional.** Projecting a 512-d capability space onto it loses real structure. Some repos will land near neighbours they have little to do with. The globe is a navigational metaphor with strong local fidelity, not a faithful map — treat cluster membership as a hint, not a claim.
-- **UMAP is not incremental.** A newly indexed repo can't be placed without either refitting or a parametric encoder. GitGlobe trains a parametric encoder against a frozen reference layout so daily additions land in stable positions; the base layout refits monthly. Coordinates therefore drift between refits, and any shared view URL must pin a layout version.
+- **A sphere's surface is two-dimensional.** Projecting a high-dimensional capability space onto it loses real structure. Some repos will land near neighbours they have little to do with. The globe is a navigational metaphor with strong local fidelity, not a faithful map — treat cluster membership as a hint, not a claim.
+- **UMAP is not incremental.** A newly indexed repo can't be placed without either refitting or a parametric encoder against a frozen reference layout, so daily additions can land in stable positions between refits. Coordinates therefore drift between refits, and any shared view URL would need to pin a layout version.
 - **README quality is uneven.** Many repos have a title and a badge. Those embed poorly and cluster in a low-signal blob. Filtering on a minimum cleaned-README length is a quality lever, not a bug.
 - **Popularity bias is real.** Any star-derived size or ranking amplifies the already-visible. The criticality-score blend mitigates it; it does not remove it.
+- **Semantic search is currently running on its lexical fallback in production** — see the Stack section above.
 
 ---
-
-
 
 ## Documentation
 
