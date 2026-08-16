@@ -239,10 +239,28 @@ export function Rig({ radius }: { radius: number }) {
     const c = ref.current;
     if (!c) return;
 
+    // Rotating the camera by θ slides the nearest surface point sideways by
+    // R·θ, and from a camera (d − R) away that subtends R·θ/(d − R). Holding
+    // the *apparent* speed constant therefore needs θ ∝ (d − R) — exactly the
+    // ratio below, normalised to 1 at the default framing.
+    //
+    // The previous version was `0.18 + 0.82 * ratio`, where the constant was
+    // meant to keep the globe draggable at full zoom. It did the opposite: the
+    // 0.18 dominates precisely where (d − R) is small, leaving close-up
+    // rotation 2-7x too fast at ordinary zoom levels and ~58x at the minimum
+    // distance. That floor *was* the "still too sensitive when zoomed in" bug.
+    //
+    // Nothing is lost by removing it: with a proportional rate, a given drag
+    // always moves the surface the same distance across the screen, so it stays
+    // just as draggable up close — the angle turned is smaller, but the view
+    // moves the same amount, which is the thing the hand is actually judging.
     const span = Math.max(radius * 1.6, 1e-3); // surface -> default framing
-    const t = THREE.MathUtils.clamp((c.distance - radius) / span, 0, 1);
-    // Never reaches zero: at full zoom the globe must still be draggable.
-    const scale = 0.18 + 0.82 * t;
+    const ratio = (c.distance - radius) / span;
+    // Upper clamp: past the default framing the globe is small on screen and a
+    // faster-than-base rate would spin it multiple turns in one flick.
+    // Lower clamp is a guard against literal zero, not a feel adjustment — it
+    // only engages inside 1.03R, closer than the camera normally goes.
+    const scale = THREE.MathUtils.clamp(ratio, 0.02, 1);
     c.azimuthRotateSpeed = BASE_ROTATE_SPEED * scale;
     c.polarRotateSpeed = BASE_ROTATE_SPEED * scale;
 
