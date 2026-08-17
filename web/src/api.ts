@@ -1,20 +1,29 @@
 /**
  * Where the API lives.
  *
- * Three components used to hardcode `http://localhost:8000`. That works on a
- * developer's machine and is meaningless once deployed: the browser resolves
- * `localhost` against the *visitor's* computer, so every request failed and the
- * panel rendered its fallbacks — "—", "Unknown", "0" — which read as a
- * repository with no metadata rather than as a broken deployment.
+ * Same-origin by default, and that is deliberate — it is the fix for an outage
+ * that was invisible from any developer machine with working DNS.
  *
- * Set `VITE_API_URL` in the hosting environment (Vercel: Project Settings →
- * Environment Variables). Vite inlines it at BUILD time, not runtime, so it has
- * to be present when the build runs — adding it afterwards changes nothing
- * until you redeploy.
+ * Pointing the browser straight at `gitglobe-api-production.up.railway.app`
+ * made every visitor resolve that hostname themselves, and Jio — India's
+ * largest ISP — answers REFUSED for the entire `up.railway.app` zone. Not our
+ * subdomain: the zone. Free-hosting wildcard domains get blocklisted wholesale
+ * and stay that way, so no redeploy or Railway-side change clears it. Those
+ * users saw "Load failed" with no request ever reaching the network.
+ *
+ * `/api` is proxied to Railway by `vercel.json` in production and by the Vite
+ * dev proxy locally, so the only hostname a visitor resolves is the one already
+ * serving them the page. Whoever resolves Railway does it somewhere with
+ * functioning DNS.
+ *
+ * `VITE_API_URL` still overrides, which is how you point at a local API:
+ * `VITE_API_URL=http://localhost:8000`. Vite inlines it at BUILD time, so it
+ * has to be present when the build runs. Setting it to an absolute
+ * `up.railway.app` URL re-creates the outage — that is what the check below is
+ * watching for.
  */
 export const API = (
-  (import.meta.env.VITE_API_URL as string | undefined) ||
-  'https://gitglobe-api-production.up.railway.app'
+  (import.meta.env.VITE_API_URL as string | undefined) || '/api'
 ).replace(/\/+$/, '');
 
 /**
@@ -27,8 +36,14 @@ export const API = (
 if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
   if (API.includes('localhost') || API.includes('127.0.0.1')) {
     console.error(
-      `[gitglobe] API is ${API} on a deployed page — VITE_API_URL was not set ` +
-        `at build time, so repository details and search will all fail.`,
+      `[gitglobe] API is ${API} on a deployed page — VITE_API_URL points at the ` +
+        `visitor's own machine, so repository details and search will all fail.`,
+    );
+  } else if (API.includes('up.railway.app')) {
+    console.error(
+      `[gitglobe] API is ${API} — a hostname whole ISPs refuse to resolve (Jio ` +
+        `returns REFUSED for the entire up.railway.app zone). Unset VITE_API_URL ` +
+        `so requests go same-origin through the /api proxy in vercel.json.`,
     );
   } else if (API.startsWith('http://')) {
     console.error(

@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://gitglobe-api-production.up.railway.app/:path*"
+    }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",
