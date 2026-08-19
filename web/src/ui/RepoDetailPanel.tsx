@@ -115,6 +115,19 @@ export function RepoDetailPanel() {
   // stars, so a dead API looked identical to sparse data. The banner below
   // carries the real reason instead.
   const description = isLoading ? 'Loading…' : (data?.description || '—');
+
+  // The teacher's sentence when there is one, GitHub's description otherwise.
+  //
+  // These are different kinds of claim and the UI has to say which it is
+  // showing. GitHub's description was written by the project's own authors
+  // about their own work; the summary is a machine's reading of their README,
+  // published under their name. It carries a marker and a link to the README so
+  // the source of truth is one click away.
+  //
+  // The API already returns null when the README was too thin to describe, so a
+  // low-signal repo shows the authors' own words rather than a confident
+  // sentence inferred from a title and a badge row.
+  const summary = isLoading ? null : (data?.summary || null);
   const stars = isLoading ? '…' : (data?.stars !== undefined ? group(data.stars) : '0');
   const language = isLoading ? '…' : (data?.language || 'Unknown');
 
@@ -184,7 +197,19 @@ export function RepoDetailPanel() {
         </p>
       )}
 
-      <p className="detail-panel__desc">{description}</p>
+      {summary ? (
+        <>
+          <p className="detail-panel__desc">{summary}</p>
+          <p className="detail-panel__attribution">
+            AI-generated from the README — may be inaccurate.{' '}
+            <a href={`${url}#readme`} target="_blank" rel="noopener noreferrer">
+              Read the README
+            </a>
+          </p>
+        </>
+      ) : (
+        <p className="detail-panel__desc">{description}</p>
+      )}
 
       <div className="detail-panel__meta" style={{ color: '#FFFFFF' }}>
         <span className="meta-item">

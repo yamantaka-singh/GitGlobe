@@ -28,7 +28,13 @@ services:
     volumes:
       - gitglobe-qdrantdata:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      # The image ships no wget, curl or nc, so the original check could only
+      # ever fail — the container reported "unhealthy" for its whole life while
+      # serving traffic fine, which meant a genuinely sick Qdrant would have
+      # looked exactly the same. bash is present and `/dev/tcp` is a builtin,
+      # so this needs nothing installed. CMD-SHELL runs via /bin/sh, and
+      # /dev/tcp is bash-only, so this must invoke bash explicitly.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200 OK'"]
       interval: 5s
       timeout: 5s
       retries: 10

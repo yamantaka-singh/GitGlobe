@@ -57,6 +57,23 @@ def _tokens() -> list[str]:
     return [single] if single else []
 
 
+def _nvidia_keys() -> list[str]:
+    """Accept one NVIDIA key or many.
+
+    The free tier's request limit is per key, and it binds hard: `teach` on one
+    key measured 103 HTTP 429s against 13 successes. Five keys round-robin to
+    roughly five times the throughput, which is the difference between a
+    fourteen-hour teacher run and a three-hour one.
+
+    Same shape as `_tokens` — plural wins, singular is the convenience.
+    """
+    multi = os.getenv("NVIDIA_API_KEYS", "")
+    if multi.strip():
+        return [k.strip() for k in multi.split(",") if k.strip()]
+    single = os.getenv("NVIDIA_API_KEY", "").strip()
+    return [single] if single else []
+
+
 @dataclass
 class Settings:
     database_url: str
@@ -64,6 +81,7 @@ class Settings:
     gcs_bucket: str = ""
     gcp_project: str = ""
     nvidia_api_key: str = ""
+    nvidia_api_keys: list[str] = field(default_factory=list)
     teacher_provider: str = "nim"
     teacher_rpm: float = 0.0
 
@@ -86,6 +104,7 @@ class Settings:
             gcs_bucket=os.getenv("GCS_BUCKET", ""),
             gcp_project=os.getenv("GCP_PROJECT", ""),
             nvidia_api_key=os.getenv("NVIDIA_API_KEY", "").strip(),
+            nvidia_api_keys=_nvidia_keys(),
             teacher_provider=os.getenv("TEACHER_PROVIDER", "nim").strip().lower(),
             teacher_rpm=float(os.getenv("TEACHER_RPM", "0") or 0),
         )

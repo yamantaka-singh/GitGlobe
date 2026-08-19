@@ -41,7 +41,26 @@ DEFAULT_LOCATION = "us-central1"
 
 #: NVIDIA's OpenAI-compatible endpoint. Free with a build.nvidia.com key.
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-NIM_DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+
+#: Chosen for surviving sustained load, not for being the strongest model.
+#:
+#: `nemotron-3-ultra-550b-a55b` answers a real teacher prompt in ~2s and rates
+#: better, but its free-tier quota collapses under a real run: 45s of sustained
+#: load measured **10 successes against 10,909 rejections**, and afterwards it
+#: returned 429 to every single request until the quota recovered. A model that
+#: is 99.9% rejected is not faster, it is unusable.
+#:
+#: This one measured 95 successes against 29 rejections under the same load, and
+#: parsed 3 of 3 real prompts. It is genuinely slower per call — ~65s against
+#: ~2s on a full README at max_tokens 4096 — but it finishes, which ultra does
+#: not.
+#:
+#: The cost is score drift: re-rating repositories ultra had already scored gave
+#: a mean absolute difference of ~21 points on the 0-100 dimensions, though the
+#: summaries stayed comparable. `repo_score.model` records which model produced
+#: each row, so a future `learn` run can filter to one model rather than train
+#: on a mixture. Set `--model` to override.
+NIM_DEFAULT_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
 DEFAULT_CONCURRENCY = 8
 
@@ -115,7 +134,13 @@ class TeacherConfig:
             self.model = NIM_DEFAULT_MODEL if self.provider == "nim" else DEFAULT_TEACHER_MODEL
         if self.provider == "nim":
             if not self.requests_per_minute:
-                self.requests_per_minute = 40.0
+                # Per key, not per run. One shared limiter paced at
+                # `40 x len(keys)` combined with round-robin gives each key its
+                # own 40/min, which is the whole reason a pool helps.
+                import os as _os
+
+                pool = [k for k in _os.environ.get("NVIDIA_API_KEYS", "").split(",") if k.strip()]
+                self.requests_per_minute = 40.0 * max(len(pool), 1)
             # This used to clamp to 8, reasoning that at 40 RPM the limiter set
             # throughput anyway and extra workers would just wait. Measured, that
             # is backwards: a 550B reasoning call takes ~90s, so 8 workers give
@@ -217,6 +242,8 @@ class Teacher:
         self._client = None
         self._credentials = None
         self._api_key = None
+        self._api_keys: list[str] = []
+        self._key_index = 0
 
     async def __aenter__(self) -> "Teacher":
         import os
@@ -224,12 +251,24 @@ class Teacher:
         import httpx
 
         if self.config.provider == "nim":
-            self._api_key = os.environ.get("NVIDIA_API_KEY", "").strip()
-            if not self._api_key:
+            # Plural wins. The free tier's request limit is per key and it binds
+            # hard — one key measured 103 HTTP 429s against 13 successes — so a
+            # pool is the only thing that moves throughput. `requests_per_minute`
+            # is scaled by the pool size in TeacherConfig, and keys rotate per
+            # request, so each key still sees its own per-key rate.
+            multi = os.environ.get("NVIDIA_API_KEYS", "").strip()
+            if multi:
+                self._api_keys = [k.strip() for k in multi.split(",") if k.strip()]
+            else:
+                single = os.environ.get("NVIDIA_API_KEY", "").strip()
+                self._api_keys = [single] if single else []
+            if not self._api_keys:
                 raise RuntimeError(
                     "No NVIDIA_API_KEY. Get one free at https://build.nvidia.com "
-                    "and export NVIDIA_API_KEY=nvapi-..."
+                    "and export NVIDIA_API_KEY=nvapi-... "
+                    "(or NVIDIA_API_KEYS=key1,key2,... for a pool)."
                 )
+            self._api_key = self._api_keys[0]
         else:
             from google.auth import default as google_auth_default
             from google.oauth2.credentials import Credentials
@@ -256,7 +295,12 @@ class Teacher:
 
     def _headers(self) -> dict:
         if self.config.provider == "nim":
-            return {"Authorization": f"Bearer {self._api_key}"}
+            # Round-robin per request. Not thread-safe by design: this runs on
+            # one event loop, and an occasional uneven split across keys costs
+            # nothing, whereas a lock on every request buys nothing back.
+            key = self._api_keys[self._key_index % len(self._api_keys)]
+            self._key_index += 1
+            return {"Authorization": f"Bearer {key}"}
         from google.auth.transport.requests import Request
 
         # Access tokens last an hour; a 4,000-row run at 40 RPM outlives two.
@@ -279,6 +323,25 @@ class Teacher:
                 # the budget has to cover both or the JSON is cut off mid-object
                 # and the row is lost to a parse failure.
                 "max_tokens": 4096,
+                # Thinking off. The rubric asks for six integers and one
+                # sentence about a README that is already in the prompt — there
+                # is no multi-step problem for a chain of thought to help with,
+                # and leaving it on cost 10.7s and 23.1s per repository at 523
+                # and 1,168 output tokens, against 1.4s and 2.3s for 77 and 84
+                # with it off, for *identical* scores on the repos checked.
+                #
+                # This does NOT fix the rate limiting, which was the reason it
+                # was tried: a paced run still measured 103 HTTP 429s against 13
+                # successes. The 429s are a per-model quota on this endpoint,
+                # not a consequence of holding connections open, and no
+                # concurrency or pacing setting works around them.
+                #
+                # Smaller models are not a substitute either. `lightning-30b-a3b`
+                # spent the entire 4,096-token budget thinking and returned no
+                # JSON at all on 2 of 3 repositories, and `super-120b` answered
+                # fast but scored the canonical awesome list 75 where this model
+                # says 100.
+                "chat_template_kwargs": {"thinking": False},
             }
         return {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
