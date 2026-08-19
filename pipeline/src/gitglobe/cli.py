@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 
 
@@ -538,6 +539,70 @@ async def _cmd_learn(args: argparse.Namespace) -> int:
     return await _with_db(run)
 
 
+async def _cmd_embed_nv(args: argparse.Namespace) -> int:
+    from .embed.nvidia import COLLECTION, DEFAULT_DIM, DEFAULT_MODEL, run
+
+    async def go(db, settings):
+        if not settings.nvidia_api_key:
+            print("No NVIDIA_API_KEY. Get one free at https://build.nvidia.com")
+            return 1
+        stats = await run(
+            db, settings.nvidia_api_key, qdrant_url=args.qdrant_url,
+            model=args.model, dim=args.dim, collection=args.collection,
+            limit=args.limit, concurrency=args.concurrency,
+        )
+        if not stats.requested:
+            print("Every repository with cleaned text is already embedded.")
+            return 0
+        print(stats.summary())
+        return 0 if stats.embedded else 1
+
+    return await _with_db(go)
+
+
+async def _cmd_backfill_readmes(args: argparse.Namespace) -> int:
+    from .ingest.readme_backfill import backfill
+
+    async def run(db, settings):
+        if not settings.github_tokens:
+            print("No GitHub token. Set GITHUB_TOKEN in .env.")
+            return 1
+        import pathlib
+
+        # Searched upward, because the tiles live at the repo root while this is
+        # normally run from `pipeline/`. Falling back to the `repo` table when
+        # the path is wrong would silently halve the work list and look like a
+        # successful run, so a bad path says so instead.
+        tiles = None
+        if args.tiles:
+            wanted = pathlib.Path(args.tiles)
+            for base in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]:
+                if (base / wanted).is_dir():
+                    tiles = base / wanted
+                    break
+            if tiles is None:
+                print(f"No tile directory at '{args.tiles}' (searched upward from {pathlib.Path.cwd()}).")
+                print("Pass --tiles '' to work from the repo table instead.")
+                return 1
+        stats = await backfill(
+            db, settings.github_tokens, limit=args.limit,
+            tiles=tiles, concurrency=args.concurrency,
+        )
+        if not stats.attempted:
+            print("Everything the globe draws already has clean text. Nothing to do.")
+            return 0
+        print(stats.summary())
+        async with db.pool.acquire() as conn:
+            total = await conn.fetchval(
+                "SELECT count(*) FROM repo WHERE clean_text IS NOT NULL AND length(clean_text) > 0"
+            )
+            rows = await conn.fetchval("SELECT count(*) FROM repo")
+        print(f"{rows:,} rows in repo; {total:,} with clean text — `teach` can read those.")
+        return 0
+
+    return await _with_db(run)
+
+
 async def _cmd_backfill_criticality(args: argparse.Namespace) -> int:
     from .rank.criticality import (
         DUMP_MEASURED_AT, DUMP_URL, fetch_criticality, match_corpus,
@@ -805,6 +870,35 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--min-labels", type=int, default=200,
                    help="Refuse to train on fewer than this many teacher labels")
     p.set_defaults(func=_cmd_learn, is_async=True)
+
+    p = sub.add_parser(
+        "embed-nv",
+        help="Embed the corpus with NVIDIA NIM into a second Qdrant collection (free tier)",
+    )
+    p.add_argument("--qdrant-url", default=os.getenv("QDRANT_URL", "http://localhost:6333"))
+    p.add_argument("--collection", default="gitglobe_nv",
+                   help="Written additively; the gemini collection behind the globe is untouched")
+    p.add_argument("--model", default="nvidia/llama-nemotron-embed-1b-v2",
+                   help="Chosen for context window (4,032+ tokens) over nv-embedqa-e5-v5's 512")
+    p.add_argument("--dim", type=int, default=2048)
+    p.add_argument("--limit", type=int, default=0, help="0 = everything still missing")
+    p.add_argument("--concurrency", type=int, default=4)
+    p.set_defaults(func=_cmd_embed_nv, is_async=True)
+
+    p = sub.add_parser(
+        "backfill-readmes",
+        help="Fetch and clean READMEs for corpus rows that have none (needed by `teach`)",
+    )
+    p.add_argument("--limit", type=int, default=500,
+                   help="How many repositories to fill, most significant first (default: 500)")
+    p.add_argument("--tiles", default="web/public/tiles",
+                   help="Tile directory whose names-*.json list every node the globe "
+                        "draws. That list is larger than the repo table — it is how the "
+                        "~111k nodes with no row get one. Pass '' to use repo instead.")
+    p.add_argument("--concurrency", type=int, default=8,
+                   help="In-flight requests, shared across all GITHUB_TOKENS via "
+                        "round-robin (default: 8 — was tuned as 4 per token)")
+    p.set_defaults(func=_cmd_backfill_readmes, is_async=True)
 
     p = sub.add_parser(
         "backfill-criticality",

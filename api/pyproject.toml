@@ -5,8 +5,8 @@ description = "GitGlobe Search API"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.111.0",
-    "qdrant-client>=1.9.0",
-    "voyageai>=0.2.0",
+    "qdrant-client>=1.9.0,<1.10",  # must match the 1.9 server; see main.py dense arm
+    "numpy>=1.26",
     "redis>=5.0.0",
     "psycopg2-binary>=2.9.9",
     "asyncpg>=0.29.0",

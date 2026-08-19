@@ -22,6 +22,30 @@ const _p = new THREE.Vector3();
 /** Rotate speed at the default framing; scaled down as the camera closes in. */
 const BASE_ROTATE_SPEED = 0.55;
 
+/**
+ * Flick-to-spin.
+ *
+ * `camera-controls` rotates by critically-damped convergence onto a target
+ * angle, and that target freezes the instant the pointer lifts — measured
+ * overshoot past it is exactly zero. So the globe stops dead under your finger
+ * instead of carrying on, which is the "it just lands there" in the review.
+ * The library has no inertia to switch on: `dampingFactor` and
+ * `draggingDampingFactor` are deprecated aliases for the smooth times, not
+ * momentum.
+ *
+ * So the throw is measured here and replayed as a decaying push on the same
+ * public `rotate()` the drag itself uses — nothing reaches past the library's
+ * API. `rotate()` takes a raw angle rather than a pointer delta, so it does not
+ * re-apply `azimuthRotateSpeed`; the coast is already distance-scaled because
+ * the velocity is sampled from the angles the globe visibly reached.
+ */
+/** Velocity decays to ~5% over 3 time constants, so a flick coasts ~1.4s. */
+const SPIN_DECAY_TAU = 0.47;
+/** Below this the motion is invisible; stopping avoids an endless tail. */
+const SPIN_REST = 0.02;
+/** A frantic swipe should not turn into a centrifuge. */
+const SPIN_MAX = 3.2;
+
 export interface FlyToOptions {
   /** Extra padding on the framing, as a multiple of globe radius. */
   padding?: number;
@@ -184,6 +208,16 @@ export function Rig({ radius }: { radius: number }) {
   const ref = useRef<CameraControlsImpl>(null);
   const invalidate = useThree((s) => s.invalidate);
 
+  // Throw state. Refs, not store state: this updates every frame and no React
+  // subtree needs to re-render because the globe is coasting.
+  const spin = useRef({
+    dragging: false,
+    lastAzimuth: 0,
+    lastPolar: 0,
+    vAzimuth: 0,   // rad/s, measured over the drag
+    vPolar: 0,
+  });
+
   useEffect(() => {
     globeCamera.radius = radius;
   }, [radius]);
@@ -200,9 +234,17 @@ export function Rig({ radius }: { radius: number }) {
     // feel like it barely responds. Coarse pointers only, so the desktop feel
     // is unchanged.
     const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-    c.dollySpeed = coarse ? 2.4 : 0.9;
+    // 2.4 was an overcorrection. Pinch genuinely does deliver less dolly per
+    // event than a wheel notch, so touch still needs more than the trackpad
+    // value — but at 2.4 a normal pinch crossed most of the zoom range at once,
+    // which reads as the zoom animation being too fast rather than as the
+    // gesture being responsive.
+    c.dollySpeed = coarse ? 1.5 : 0.9;
     c.truckSpeed = 0;
-    c.smoothTime = 0.32;
+    // Governs programmatic transitions (fly-to on select, reset, domain focus)
+    // and the settle after a gesture. 0.32 arrives almost immediately, so a
+    // fly-to reads as a cut rather than a move; 0.45 lets the eye follow it.
+    c.smoothTime = 0.45;
     c.draggingSmoothTime = 0.14;
     // Actual values are set per-frame below, scaled by distance.
     c.azimuthRotateSpeed = BASE_ROTATE_SPEED;
@@ -219,9 +261,42 @@ export function Rig({ radius }: { radius: number }) {
 
     // Start at the establishing framing, not the working one — the Intro
     // overlay is up, and Start needs somewhere to fly from.
+    // A drag begins: stop any existing coast so a new grab takes over cleanly,
+    // and seed the sampler with the current angles.
+    const onStart = () => {
+      const st = spin.current;
+      st.dragging = true;
+      st.vAzimuth = 0;
+      st.vPolar = 0;
+      st.lastAzimuth = c.azimuthAngle;
+      st.lastPolar = c.polarAngle;
+    };
+    // A drag ends: whatever velocity was last measured becomes the throw. A tap
+    // measures ~0 and therefore coasts nowhere, which is the behaviour we want
+    // without needing to distinguish a tap from a drag explicitly.
+    const onEnd = () => {
+      spin.current.dragging = false;
+      // Close the drag lag before coasting.
+      //
+      // A drag rotates with transition enabled, so the rendered angle
+      // (`_spherical`, what `azimuthAngle` reports) trails the commanded one
+      // (`_sphericalEnd`) by about `draggingSmoothTime`. The coast rotates with
+      // transition *disabled*, which snaps rendered onto commanded — so without
+      // this the first coasted frame teleports forward by that whole trailing
+      // gap, ~16° after a 2 rad/s flick. Re-anchoring the commanded angle onto
+      // the rendered one costs the last few degrees the finger asked for, which
+      // the coast immediately replays at the same speed. The globe carries on
+      // from where it was actually drawn, which is where the hand let go.
+      c.rotateTo(c.azimuthAngle, c.polarAngle, false);
+    };
+    c.addEventListener('controlstart', onStart);
+    c.addEventListener('controlend', onEnd);
+
     void globeCamera.establish();
     invalidate();
     return () => {
+      c.removeEventListener('controlstart', onStart);
+      c.removeEventListener('controlend', onEnd);
       globeCamera.controls = null;
     };
   }, [radius, invalidate]);
@@ -265,6 +340,50 @@ export function Rig({ radius }: { radius: number }) {
     c.polarRotateSpeed = BASE_ROTATE_SPEED * scale;
 
     const { autoRotate, cameraBusy, reducedMotion, hoveredId, selectedId } = useGlobeStore.getState();
+    const st = spin.current;
+
+    if (st.dragging) {
+      // Sample the throw from the angles the library actually reached, not from
+      // raw pointer deltas — that way the distance scaling above, the smoothing,
+      // and the polar clamp are all already baked in, and the coast continues at
+      // exactly the speed the globe was visibly moving.
+      if (delta > 0) {
+        const vA = (c.azimuthAngle - st.lastAzimuth) / delta;
+        const vP = (c.polarAngle - st.lastPolar) / delta;
+        // Light smoothing: one stuttered frame at the moment of release should
+        // not decide the whole throw.
+        st.vAzimuth = st.vAzimuth * 0.6 + vA * 0.4;
+        st.vPolar = st.vPolar * 0.6 + vP * 0.4;
+      }
+      st.lastAzimuth = c.azimuthAngle;
+      st.lastPolar = c.polarAngle;
+      return; // the finger is driving; nothing else may touch the camera
+    }
+
+    // A fly-to owns the camera outright, and reduced motion means no coasting.
+    if (cameraBusy || reducedMotion) {
+      st.vAzimuth = 0;
+      st.vPolar = 0;
+    }
+
+    const speed = Math.hypot(st.vAzimuth, st.vPolar);
+    if (speed > SPIN_REST) {
+      if (speed > SPIN_MAX) {
+        const k = SPIN_MAX / speed;
+        st.vAzimuth *= k;
+        st.vPolar *= k;
+      }
+      c.rotate(st.vAzimuth * delta, st.vPolar * delta, false);
+      // Exponential decay, framerate-independent: a 120Hz phone and a 60Hz
+      // laptop coast for the same wall-clock time.
+      const k = Math.exp(-delta / SPIN_DECAY_TAU);
+      st.vAzimuth *= k;
+      st.vPolar *= k;
+      return; // coasting counts as motion; idle rotation waits its turn
+    }
+    st.vAzimuth = 0;
+    st.vPolar = 0;
+
     if (!autoRotate || cameraBusy || reducedMotion || hoveredId >= 0 || selectedId >= 0) return;
 
     // Decreased rotation speed as requested

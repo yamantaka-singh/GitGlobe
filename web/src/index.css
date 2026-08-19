@@ -825,6 +825,25 @@ button:focus-visible {
   color: #E2E8F0;
 }
 
+/* Marks the sentence above as a machine's reading of someone else's README
+   rather than the authors' own words. Quiet, but never hidden — it is the
+   attribution, so it stays legible rather than decorative. */
+.detail-panel__attribution {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94A3B8;
+}
+
+.detail-panel__attribution a {
+  color: #94A3B8;
+  text-decoration: underline;
+}
+
+.detail-panel__attribution a:hover {
+  color: #E2E8F0;
+}
+
 .detail-panel__meta {
   display: flex;
   gap: 16px;

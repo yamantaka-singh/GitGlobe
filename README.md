@@ -91,16 +91,17 @@ Five ideas do the heavy lifting:
 | **Camera** | `camera-controls` (yomotsu) | Promise-based `.setLookAt(..., enableTransition)` — purpose-built for scripted fly-to. |
 | **Frontend** | React 19 + TypeScript + Vite + Zustand + TanStack Query | Fast HMR against a heavy WebGL scene; Zustand keeps camera state out of React's render path; Query owns the repo-detail and search fetches. |
 | **API** | FastAPI (Python) + Pydantic | Same language as the ML pipeline; no model-serving bridge. |
-| **Vector search** | Qdrant | Scalar quantization + HNSW over the corpus's 768-d vectors. |
-| **Metadata** | Postgres (asyncpg) | Repo rows, adjacency lists, cluster labels; a lexical `ILIKE` fallback when semantic search has no client configured. |
-| **Embeddings** | Vertex AI `gemini-embedding-001` | Matryoshka-trained — truncating to 768-d costs ~0.26% quality for a quarter of the storage a 3072-d vector would need. |
+| **Vector search** | Qdrant | Two collections: `gitglobe_repos` (768-d, layout) and `gitglobe_nv` (2048-d, retrieval) — see the note below on why they're separate. |
+| **Metadata** | Postgres (asyncpg) | Repo rows, adjacency lists, cluster labels, full-text search for the lexical search arm. |
+| **Layout embeddings** | Vertex AI `gemini-embedding-001` | Matryoshka-trained — truncating to 768-d costs ~0.26% quality for a quarter of the storage a 3072-d vector would need. Fixed once at ingest; the globe's coordinates are derived from these and must not move. |
+| **Retrieval embeddings** | NVIDIA NIM `llama-nemotron-embed-1b-v2` | 2048-d, free tier, asymmetric `query`/`passage` encoding. Vertex billing is off (see below), so `/search` embeds queries here instead. |
 | **Reduction** | `umap-learn` (CPU) | `output_metric="haversine"` isn't exposed by every accelerated UMAP implementation, so this stays a portable CPU stage rather than something the ingest step has to import. |
 | **Pipeline orchestration** | Prefect | A single `gitglobe <subcommand>` CLI (ingest, clean, embed, project, cluster, edges, rank, build) rather than one monolithic run. |
 | **Tiles** | Static binary blobs | S2-binned, quantized, served alongside the web app — no separate tile server. |
 
 Full library-by-library breakdown with versions and rationale: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md#library-reference).
 
-> **A live inconsistency, not a documentation gap:** the corpus was embedded with Vertex AI (768-d), but `/search` in the API embeds the *query* with Voyage (`voyage-2`) when `VOYAGE_API_KEY` is set — two different vector spaces, so any cosine similarity between them is meaningless. In the current deployment that key is unset, so every request takes the Postgres `ILIKE` fallback, which is why this hasn't surfaced as visibly broken rankings. Re-pointing the query-time embed call at Vertex (or re-embedding the corpus with Voyage) is the fix; tracked here rather than silently patched.
+> **Why retrieval doesn't reuse the globe's own vectors:** the globe's layout comes from `gemini-embedding-001` vectors in `gitglobe_repos`, and those must never move — re-embedding them would shift every point on the sphere. `/search` needed a working embedder and the GCP billing account backing Vertex is closed, so retrieval writes to its own collection (`gitglobe_nv`, NVIDIA) instead. This used to be the opposite problem: the corpus was 768-d and the query path briefly embedded with a 1024-d model, a silent width mismatch that degraded every search to a Postgres substring match with nothing in the logs saying so. `api/tests/test_search_contract.py` pins the width and the query/passage sub-space so that class of bug fails a test instead of failing silently again.
 
 ---
 
@@ -186,14 +187,17 @@ uv venv && uv pip install -e ".[dev]"
 # and DATABASE_URL — see settings.py for the full list, loaded via a small
 # hand-rolled .env reader rather than python-dotenv.
 uv run gitglobe ingest
-uv run gitglobe embed      # costs money — Vertex AI billing
+uv run gitglobe embed      # layout vectors — costs money, Vertex AI billing
 uv run gitglobe project    # UMAP, CPU, slow
 uv run gitglobe cluster
 uv run gitglobe edges
 uv run gitglobe rank
 uv run gitglobe build      # writes tiles + manifest for the web app
+uv run gitglobe embed-nv   # retrieval vectors — free, NVIDIA NIM (NVIDIA_API_KEY)
 
 # --- api ---
+# .env needs NVIDIA_API_KEY for dense search; without it /search still works
+# on the lexical + name arms alone.
 cd ../api && uv run fastapi dev
 
 # --- web ---
@@ -225,7 +229,7 @@ Star count is a popularity proxy that heavily favours old repos. Node radius ble
 - [x] **Phase 1** — Ingest real repos, cleaned and enriched
 - [x] **Phase 2** — Embed + spherical UMAP + S2 tiling
 - [x] **Phase 3** — Real data on the globe, hover/tap, GPU picking, mobile input tuning
-- [x] **Phase 4** — Hybrid search API with reranking (currently degraded — see the Stack note on the embedding-space mismatch)
+- [x] **Phase 4** — Hybrid search: dense (NVIDIA) + lexical (Postgres FTS) + exact-name arms, fused by weighted RRF with a star-count re-rank on the dense candidates. Measured recall@10 = 0.472 on a 30-query eval set (`api/tests/eval_search.py`), against a corpus ceiling of 0.709 — the gap is repos missing from the corpus, not retrieval quality.
 - [ ] **Phase 5** — Wire an agent to the existing ID-based camera-control API; nothing calls it yet
 - [x] **Phase 6** — Dependency and semantic arcs (directional, demand-loaded backbone web)
 - [ ] **Phase 7** — Scale to 1,000,000 points, nebula labels, share-a-view URLs
@@ -242,7 +246,7 @@ Worth stating up front, because they shape the product.
 - **UMAP is not incremental.** A newly indexed repo can't be placed without either refitting or a parametric encoder against a frozen reference layout, so daily additions can land in stable positions between refits. Coordinates therefore drift between refits, and any shared view URL would need to pin a layout version.
 - **README quality is uneven.** Many repos have a title and a badge. Those embed poorly and cluster in a low-signal blob. Filtering on a minimum cleaned-README length is a quality lever, not a bug.
 - **Popularity bias is real.** Any star-derived size or ranking amplifies the already-visible. The criticality-score blend mitigates it; it does not remove it.
-- **Semantic search is currently running on its lexical fallback in production** — see the Stack section above.
+- **Search recall is 0.472@10, not the 0.7 target.** The corpus ceiling is 0.709 — 34 of 117 eval-set repos aren't in the corpus at all — so 0.7 isn't reachable without ingesting more of them; retrieval itself is already at 70% of what's reachable.
 
 ---
 
