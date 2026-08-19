@@ -19,6 +19,7 @@ export function SearchBox() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [approachable, setApproachable] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Debounce the query for the API
@@ -55,13 +56,16 @@ export function SearchBox() {
   }, []);
 
   const { data: results, isLoading, isError, error } = useQuery({
-    queryKey: ['search', debouncedQuery],
+    queryKey: ['search', debouncedQuery, approachable],
     queryFn: async () => {
       if (!debouncedQuery.trim()) return [];
       // Name the actual failure. A bare "Search failed" hides the difference
       // between a 500, a CORS rejection and an unreachable host — which are the
       // three things that actually go wrong here, and they have different fixes.
-      const res = await fetch(`${API}/search?q=${encodeURIComponent(debouncedQuery)}&limit=5`).catch(
+      const approachableParam = approachable ? '&approachable=true' : '';
+      const res = await fetch(
+        `${API}/search?q=${encodeURIComponent(debouncedQuery)}&limit=5${approachableParam}`,
+      ).catch(
         (e) => {
           throw new Error(`Cannot reach ${new URL(API).host} (${e?.message ?? 'network error'})`);
         },
@@ -153,6 +157,15 @@ export function SearchBox() {
         }}
         onFocus={() => setIsOpen(true)}
       />
+      <button
+        type="button"
+        className={`search-box__filter${approachable ? ' is-active' : ''}`}
+        aria-pressed={approachable}
+        title="Only show beginner-friendly, licensed, actively maintained repos"
+        onClick={() => setApproachable((v) => !v)}
+      >
+        Beginner friendly
+      </button>
 
       {open && (
         <div 

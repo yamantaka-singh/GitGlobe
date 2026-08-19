@@ -81,6 +81,8 @@ Five ideas do the heavy lifting:
 
 **6. Rank is measured, not modelled.** GitHub's search API reports exact counts, so walking a star ladder yields the empirical survival function over hundreds of millions of repositories. A repository's rank is its position among *all* public repositories, not among the ones this corpus happens to hold — which would flatter every result by orders of magnitude.
 
+**7. Approachability is a first-class signal, not just a ranking input.** The same teacher rubric that scores quality also scores `onboarding_ease` and `learning_value` — how easy a project is to get into, not how good it is. The detail panel surfaces that directly (a "Beginner friendly" badge, license, last-push recency), and `/search?approachable=true` filters to repos that are alive, licensed, unarchived, and score above the onboarding-ease bar. A repo the teacher never reached gets a one-sentence summary generated on first view and cached forever after, so coverage isn't capped by what the batch teacher run could afford to rate.
+
 ---
 
 ## Stack
@@ -232,6 +234,7 @@ Star count is a popularity proxy that heavily favours old repos. Node radius ble
 - [x] **Phase 4** — Hybrid search: dense (NVIDIA) + lexical (Postgres FTS) + exact-name arms, fused by weighted RRF with a star-count re-rank on the dense candidates. Measured recall@10 = 0.472 on a 30-query eval set (`api/tests/eval_search.py`), against a corpus ceiling of 0.709 — the gap is repos missing from the corpus, not retrieval quality.
 - [ ] **Phase 5** — Wire an agent to the existing ID-based camera-control API; nothing calls it yet
 - [x] **Phase 6** — Dependency and semantic arcs (directional, demand-loaded backbone web)
+- [x] **Phase 6.5** — Approachability signals surfaced end-to-end: `onboarding_ease`/`learning_value` exposed via the API, a "Beginner friendly" search filter, badges in the detail panel, and on-demand README summaries (single-flight, cached) for repos the batch teacher never rated
 - [ ] **Phase 7** — Scale to 1,000,000 points, nebula labels, share-a-view URLs
 
 Detailed tasks and exit criteria per phase: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).

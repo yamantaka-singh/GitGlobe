@@ -131,6 +131,27 @@ export function RepoDetailPanel() {
   const stars = isLoading ? '…' : (data?.stars !== undefined ? group(data.stars) : '0');
   const language = isLoading ? '…' : (data?.language || 'Unknown');
 
+  // Same 50-point bar the API's `/search?approachable=true` filter uses
+  // (`APPROACHABLE_PREDICATE` in main.py) — kept identical so a repo the
+  // filter would surface is the same one this badge calls friendly. The score
+  // comes from the teacher where one rated this repo, the student everywhere
+  // else; either way it never read `stars` to get there.
+  const onboardingEase = isLoading ? null : (data?.onboarding_ease ?? null);
+  const isBeginnerFriendly = onboardingEase !== null && onboardingEase >= 50;
+
+  // `Intl.RelativeTimeFormat` — native, no date library for one string.
+  const pushedAt = isLoading ? null : (data?.pushed_at ? new Date(data.pushed_at) : null);
+  const activityLabel = (() => {
+    if (!pushedAt) return null;
+    const days = Math.round((Date.now() - pushedAt.getTime()) / 86_400_000);
+    if (days < 60) return 'Active';
+    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+    if (days < 730) return `Pushed ${rtf.format(-Math.round(days / 30), 'month')}`;
+    return `Pushed ${rtf.format(-Math.round(days / 365), 'year')}`;
+  })();
+  const isArchived = isLoading ? false : !!data?.is_archived;
+  const license = isLoading ? null : (data?.license || null);
+
   const dependentsList = graphData?.edges
     .filter((e: any) => e.target === identity.fullName)
     .map((e: any) => e.source) || [];
@@ -209,6 +230,15 @@ export function RepoDetailPanel() {
         </>
       ) : (
         <p className="detail-panel__desc">{description}</p>
+      )}
+
+      {!isLoading && (license || activityLabel || isBeginnerFriendly || isArchived) && (
+        <div className="detail-panel__badges">
+          {isArchived && <span className="badge badge--warn">Archived</span>}
+          {isBeginnerFriendly && <span className="badge badge--good">Beginner friendly</span>}
+          {activityLabel && <span className="badge">{activityLabel}</span>}
+          {license && <span className="badge">{license}</span>}
+        </div>
       )}
 
       <div className="detail-panel__meta" style={{ color: '#FFFFFF' }}>
