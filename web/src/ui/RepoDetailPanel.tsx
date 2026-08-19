@@ -46,6 +46,18 @@ export function RepoDetailPanel() {
     enabled: selectedId >= 0 && repoId > 0,
     retry: false,
     staleTime: 5 * 60_000,
+    // The API kicks off summary generation as a background task and returns
+    // immediately — `summary` is null on the first response for any repo the
+    // batch teacher never rated. It takes ~12s to generate (the model reasons
+    // regardless of `thinking: false`, see api/summarize.py), so poll for it
+    // rather than block the panel open. Capped at 6 tries (~21s): a repo with
+    // no README, or one already claimed by another request's lock, never gets
+    // a summary and would otherwise poll forever.
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (!d || d.summary || (query.state.dataUpdateCount ?? 0) >= 6) return false;
+      return 3_500;
+    },
   });
 
   const [showList, setShowList] = useState<'dependents' | 'dependencies' | 'alternatives' | null>(null);

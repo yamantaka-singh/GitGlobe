@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(levelname)s:     %(name)s - %(message)s",
 )
 
-from fastapi import FastAPI, Query, HTTPException, Depends, Response
+from fastapi import FastAPI, Query, HTTPException, Depends, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncpg
@@ -619,7 +619,7 @@ REPO_SELECT = """
 SOURCE_TEACHER_DISPLAY = 2
 
 
-async def maybe_generate_summary(conn, row) -> Optional[str]:
+async def maybe_generate_summary(row) -> Optional[str]:
     """One repo, one generation attempt, cached forever after.
 
     Only reached when `REPO_SELECT` already found no summary. Skips the same
@@ -634,6 +634,10 @@ async def maybe_generate_summary(conn, row) -> Optional[str]:
     the cached row. Bounded latency, not retried: a slow or failed call costs
     this one request, once; add a retry queue only if that measurably isn't
     enough under real traffic.
+
+    Runs as a FastAPI `BackgroundTasks` job — `get_repo` returns before this
+    finishes, so the connection it was called with will already be back in
+    the pool by the time this runs. Acquires its own.
     """
     if not state.summarizer or not row["clean_text"] or row["low_signal"]:
         return None
@@ -651,19 +655,20 @@ async def maybe_generate_summary(conn, row) -> Optional[str]:
         log.info("On-demand summary skipped for %s: %s", row["full_name"], e)
         return None
 
-    await conn.execute(
-        """
-        INSERT INTO repo_score (repo_id, source, summary, model)
-        VALUES ($1, $2, $3, $4)
-        ON CONFLICT (repo_id, source) DO NOTHING
-        """,
-        row["id"], SOURCE_TEACHER_DISPLAY, summary, SUMMARY_MODEL,
-    )
+    async with state.db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO repo_score (repo_id, source, summary, model)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (repo_id, source) DO NOTHING
+            """,
+            row["id"], SOURCE_TEACHER_DISPLAY, summary, SUMMARY_MODEL,
+        )
     return summary
 
 
 @app.get("/repo/{repo_id}", response_model=Optional[RepoMetadata])
-async def get_repo(repo_id: int, name: Optional[str] = Query(None)):
+async def get_repo(repo_id: int, background_tasks: BackgroundTasks, name: Optional[str] = Query(None)):
     async with state.db_pool.acquire() as conn:
         row = None
 
@@ -679,10 +684,13 @@ async def get_repo(repo_id: int, name: Optional[str] = Query(None)):
 
         if row:
             metadata = RepoMetadata(**row)
+            # Fired after the response is sent, not awaited here — the model
+            # reasons before answering regardless of `thinking: false` (see
+            # summarize.py), so this was blocking every first click on an
+            # unsummarized repo for ~12s. The panel polls for it instead
+            # (see web/src/ui/RepoDetailPanel.tsx).
             if metadata.summary is None:
-                generated = await maybe_generate_summary(conn, row)
-                if generated:
-                    metadata.summary = generated
+                background_tasks.add_task(maybe_generate_summary, row)
             return metadata
     
     # Final fallback: fetch from GitHub public API (60 req/hr unauthenticated).
