@@ -3,8 +3,8 @@ dist/
 .DS_Store
 *.local
 
-# Generated world — reproducible with `npm run gen:world`
-public/tiles/
+# Real dataset lives in git — `npm run gen:world` only makes synthetic
+# placeholder data, not the pipeline-sourced tiles this repo ships.
 
 # Planet diagnostics — reproducible with `npm run preview:planet`
 public/planet-preview.png
