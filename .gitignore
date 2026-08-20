@@ -35,3 +35,4 @@ check_*.js
 test-rotate.js
 data_pipeline.py
 repos_spatial.json
+.vercel
