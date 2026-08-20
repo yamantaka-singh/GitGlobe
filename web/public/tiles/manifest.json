@@ -1,0 +1,3668 @@
+{
+  "layoutVersion": 2,
+  "generatedAt": "2026-08-13T12:26:09+00:00",
+  "seed": 42,
+  "total": 198731,
+  "synthetic": false,
+  "bands": [
+    {
+      "band": 0,
+      "count": 3975,
+      "bytes": 47716,
+      "file": "band-0.bin",
+      "names": "names-0.json",
+      "meta": "meta-0.json"
+    },
+    {
+      "band": 1,
+      "count": 35772,
+      "bytes": 429280,
+      "file": "band-1.bin",
+      "names": "names-1.json",
+      "meta": "meta-1.json"
+    },
+    {
+      "band": 2,
+      "count": 158984,
+      "bytes": 1907824,
+      "file": "band-2.bin",
+      "names": "names-2.json",
+      "meta": "meta-2.json"
+    }
+  ],
+  "domains": [
+    "machine learning",
+    "web frontend",
+    "data and storage",
+    "infrastructure",
+    "languages and compilers",
+    "systems and embedded",
+    "data engineering",
+    "security",
+    "graphics and games",
+    "mobile",
+    "automation and tooling",
+    "science and numerics"
+  ],
+  "graph": {
+    "file": "graph.bin",
+    "bytes": 4072040,
+    "directedEdges": 206247,
+    "csrEntries": 412494,
+    "ambientArcs": 900,
+    "pagerank": {
+      "damping": 0.85,
+      "iterations": 107,
+      "converged": true,
+      "delta": 9.751465328463189e-11
+    },
+    "degree": {
+      "mean": 2.076,
+      "max": 2051,
+      "p50": 0,
+      "p99": 33
+    }
+  },
+  "clusters": [
+    {
+      "id": 0,
+      "label": "cluster-0",
+      "domain": 7,
+      "theta": 2.359994,
+      "phi": 1.355755,
+      "kappa": 438.385,
+      "size": 402
+    },
+    {
+      "id": 1,
+      "label": "cluster-1",
+      "domain": 4,
+      "theta": 0.806575,
+      "phi": 4.487174,
+      "kappa": 471.757,
+      "size": 565
+    },
+    {
+      "id": 2,
+      "label": "cluster-2",
+      "domain": 11,
+      "theta": 0.981619,
+      "phi": 0.625773,
+      "kappa": 364.691,
+      "size": 461
+    },
+    {
+      "id": 3,
+      "label": "cluster-3",
+      "domain": 1,
+      "theta": 2.043347,
+      "phi": 5.553365,
+      "kappa": 366.686,
+      "size": 452
+    },
+    {
+      "id": 4,
+      "label": "cluster-4",
+      "domain": 0,
+      "theta": 1.200109,
+      "phi": 2.551129,
+      "kappa": 471.387,
+      "size": 531
+    },
+    {
+      "id": 5,
+      "label": "cluster-5",
+      "domain": 6,
+      "theta": 2.247506,
+      "phi": 3.607418,
+      "kappa": 381.455,
+      "size": 406
+    },
+    {
+      "id": 6,
+      "label": "cluster-6",
+      "domain": 1,
+      "theta": 1.879894,
+      "phi": 0.299423,
+      "kappa": 359.073,
+      "size": 458
+    },
+    {
+      "id": 7,
+      "label": "cluster-7",
+      "domain": 9,
+      "theta": 1.069447,
+      "phi": 5.74723,
+      "kappa": 383.91,
+      "size": 449
+    },
+    {
+      "id": 8,
+      "label": "cluster-8",
+      "domain": 10,
+      "theta": 0.252232,
+      "phi": 2.240824,
+      "kappa": 394.241,
+      "size": 589
+    },
+    {
+      "id": 9,
+      "label": "cluster-9",
+      "domain": 5,
+      "theta": 1.459642,
+      "phi": 1.591136,
+      "kappa": 418.349,
+      "size": 426
+    },
+    {
+      "id": 10,
+      "label": "cluster-10",
+      "domain": 4,
+      "theta": 1.668339,
+      "phi": 4.561907,
+      "kappa": 436.46,
+      "size": 377
+    },
+    {
+      "id": 11,
+      "label": "cluster-11",
+      "domain": 6,
+      "theta": 1.278764,
+      "phi": 3.654537,
+      "kappa": 449.216,
+      "size": 482
+    },
+    {
+      "id": 12,
+      "label": "cluster-12",
+      "domain": 3,
+      "theta": 3.011083,
+      "phi": 5.926161,
+      "kappa": 564.703,
+      "size": 757
+    },
+    {
+      "id": 13,
+      "label": "cluster-13",
+      "domain": 3,
+      "theta": 2.16163,
+      "phi": 2.48157,
+      "kappa": 422.579,
+      "size": 399
+    },
+    {
+      "id": 14,
+      "label": "cluster-14",
+      "domain": 10,
+      "theta": 0.404346,
+      "phi": 6.004828,
+      "kappa": 385.763,
+      "size": 474
+    },
+    {
+      "id": 15,
+      "label": "cluster-15",
+      "domain": 11,
+      "theta": 1.56542,
+      "phi": 0.916294,
+      "kappa": 390.2,
+      "size": 595
+    },
+    {
+      "id": 16,
+      "label": "cluster-16",
+      "domain": 4,
+      "theta": 1.44712,
+      "phi": 5.19648,
+      "kappa": 369.301,
+      "size": 515
+    },
+    {
+      "id": 17,
+      "label": "cluster-17",
+      "domain": 0,
+      "theta": 1.634799,
+      "phi": 2.99175,
+      "kappa": 422.5,
+      "size": 443
+    },
+    {
+      "id": 18,
+      "label": "cluster-18",
+      "domain": 8,
+      "theta": 2.351639,
+      "phi": 4.791442,
+      "kappa": 431.951,
+      "size": 451
+    },
+    {
+      "id": 19,
+      "label": "cluster-19",
+      "domain": 10,
+      "theta": 0.700943,
+      "phi": 3.623608,
+      "kappa": 410.923,
+      "size": 452
+    },
+    {
+      "id": 20,
+      "label": "cluster-20",
+      "domain": 2,
+      "theta": 0.798866,
+      "phi": 1.877102,
+      "kappa": 423.091,
+      "size": 666
+    },
+    {
+      "id": 21,
+      "label": "cluster-21",
+      "domain": 1,
+      "theta": 2.424289,
+      "phi": 6.266362,
+      "kappa": 303.536,
+      "size": 618
+    },
+    {
+      "id": 22,
+      "label": "cluster-22",
+      "domain": 9,
+      "theta": 1.56698,
+      "phi": 5.95803,
+      "kappa": 444.889,
+      "size": 532
+    },
+    {
+      "id": 23,
+      "label": "cluster-23",
+      "domain": 3,
+      "theta": 2.658387,
+      "phi": 2.861848,
+      "kappa": 389.846,
+      "size": 540
+    },
+    {
+      "id": 24,
+      "label": "cluster-24",
+      "domain": 5,
+      "theta": 1.68879,
+      "phi": 2.142409,
+      "kappa": 435.049,
+      "size": 578
+    },
+    {
+      "id": 25,
+      "label": "cluster-25",
+      "domain": 6,
+      "theta": 1.746417,
+      "phi": 4.01895,
+      "kappa": 442.1,
+      "size": 551
+    },
+    {
+      "id": 26,
+      "label": "cluster-26",
+      "domain": 9,
+      "theta": 1.351124,
+      "phi": 0.194949,
+      "kappa": 331.044,
+      "size": 489
+    },
+    {
+      "id": 27,
+      "label": "cluster-27",
+      "domain": 4,
+      "theta": 1.248302,
+      "phi": 4.294078,
+      "kappa": 537.641,
+      "size": 433
+    },
+    {
+      "id": 28,
+      "label": "cluster-28",
+      "domain": 7,
+      "theta": 2.314091,
+      "phi": 0.632057,
+      "kappa": 389.967,
+      "size": 533
+    },
+    {
+      "id": 29,
+      "label": "cluster-29",
+      "domain": 4,
+      "theta": 0.769092,
+      "phi": 5.313814,
+      "kappa": 429.616,
+      "size": 569
+    },
+    {
+      "id": 30,
+      "label": "cluster-30",
+      "domain": 2,
+      "theta": 0.643191,
+      "phi": 1.176926,
+      "kappa": 365.068,
+      "size": 438
+    },
+    {
+      "id": 31,
+      "label": "cluster-31",
+      "domain": 5,
+      "theta": 1.91529,
+      "phi": 1.733548,
+      "kappa": 481.354,
+      "size": 445
+    },
+    {
+      "id": 32,
+      "label": "cluster-32",
+      "domain": 0,
+      "theta": 0.762692,
+      "phi": 2.721145,
+      "kappa": 384.346,
+      "size": 450
+    },
+    {
+      "id": 33,
+      "label": "cluster-33",
+      "domain": 10,
+      "theta": 0.290151,
+      "phi": 4.476127,
+      "kappa": 491.52,
+      "size": 417
+    },
+    {
+      "id": 34,
+      "label": "cluster-34",
+      "domain": 11,
+      "theta": 1.145081,
+      "phi": 1.218205,
+      "kappa": 514.796,
+      "size": 672
+    },
+    {
+      "id": 35,
+      "label": "cluster-35",
+      "domain": 0,
+      "theta": 1.119789,
+      "phi": 3.09416,
+      "kappa": 424.209,
+      "size": 557
+    },
+    {
+      "id": 36,
+      "label": "cluster-36",
+      "domain": 6,
+      "theta": 2.043025,
+      "phi": 4.195651,
+      "kappa": 403.61,
+      "size": 453
+    },
+    {
+      "id": 37,
+      "label": "cluster-37",
+      "domain": 6,
+      "theta": 1.757988,
+      "phi": 3.445372,
+      "kappa": 401.399,
+      "size": 374
+    },
+    {
+      "id": 38,
+      "label": "cluster-38",
+      "domain": 7,
+      "theta": 2.832964,
+      "phi": 1.34769,
+      "kappa": 446.646,
+      "size": 414
+    },
+    {
+      "id": 39,
+      "label": "cluster-39",
+      "domain": 3,
+      "theta": 2.132321,
+      "phi": 3.007324,
+      "kappa": 378.152,
+      "size": 438
+    },
+    {
+      "id": 40,
+      "label": "cluster-40",
+      "domain": 4,
+      "theta": 1.218113,
+      "phi": 4.682343,
+      "kappa": 372.085,
+      "size": 463
+    },
+    {
+      "id": 41,
+      "label": "cluster-41",
+      "domain": 8,
+      "theta": 2.665945,
+      "phi": 4.168752,
+      "kappa": 417.649,
+      "size": 414
+    },
+    {
+      "id": 42,
+      "label": "cluster-42",
+      "domain": 8,
+      "theta": 1.88512,
+      "phi": 4.999991,
+      "kappa": 487.96,
+      "size": 525
+    },
+    {
+      "id": 43,
+      "label": "cluster-43",
+      "domain": 3,
+      "theta": 2.384691,
+      "phi": 2.113541,
+      "kappa": 415.313,
+      "size": 529
+    },
+    {
+      "id": 44,
+      "label": "cluster-44",
+      "domain": 9,
+      "theta": 0.969576,
+      "phi": 6.172229,
+      "kappa": 406.475,
+      "size": 587
+    },
+    {
+      "id": 45,
+      "label": "cluster-45",
+      "domain": 7,
+      "theta": 1.908845,
+      "phi": 1.218488,
+      "kappa": 409.136,
+      "size": 539
+    },
+    {
+      "id": 46,
+      "label": "cluster-46",
+      "domain": 8,
+      "theta": 2.557113,
+      "phi": 5.338845,
+      "kappa": 392.516,
+      "size": 430
+    },
+    {
+      "id": 47,
+      "label": "cluster-47",
+      "domain": 0,
+      "theta": 1.691542,
+      "phi": 2.621858,
+      "kappa": 368.481,
+      "size": 445
+    },
+    {
+      "id": 48,
+      "label": "cluster-48",
+      "domain": 9,
+      "theta": 1.453056,
+      "phi": 5.609601,
+      "kappa": 367.115,
+      "size": 527
+    },
+    {
+      "id": 49,
+      "label": "cluster-49",
+      "domain": 10,
+      "theta": 0.982863,
+      "phi": 3.862632,
+      "kappa": 420.398,
+      "size": 577
+    },
+    {
+      "id": 50,
+      "label": "cluster-50",
+      "domain": 7,
+      "theta": 2.70156,
+      "phi": 0.395002,
+      "kappa": 395.804,
+      "size": 540
+    },
+    {
+      "id": 51,
+      "label": "cluster-51",
+      "domain": 5,
+      "theta": 1.206443,
+      "phi": 2.152228,
+      "kappa": 453.644,
+      "size": 532
+    },
+    {
+      "id": 52,
+      "label": "cluster-52",
+      "domain": 1,
+      "theta": 2.007331,
+      "phi": 5.965306,
+      "kappa": 390.194,
+      "size": 481
+    },
+    {
+      "id": 53,
+      "label": "cluster-53",
+      "domain": 11,
+      "theta": 1.933854,
+      "phi": 0.76314,
+      "kappa": 331.687,
+      "size": 561
+    },
+    {
+      "id": 54,
+      "label": "cluster-54",
+      "domain": 11,
+      "theta": 1.330506,
+      "phi": 0.581687,
+      "kappa": 362.965,
+      "size": 433
+    },
+    {
+      "id": 55,
+      "label": "cluster-55",
+      "domain": 4,
+      "theta": 1.089314,
+      "phi": 5.312298,
+      "kappa": 441.384,
+      "size": 514
+    },
+    {
+      "id": 56,
+      "label": "cluster-56",
+      "domain": 5,
+      "theta": 2.038708,
+      "phi": 2.088418,
+      "kappa": 357.707,
+      "size": 435
+    },
+    {
+      "id": 57,
+      "label": "cluster-57",
+      "domain": 9,
+      "theta": 1.290178,
+      "phi": 6.057346,
+      "kappa": 479.627,
+      "size": 544
+    },
+    {
+      "id": 58,
+      "label": "cluster-58",
+      "domain": 2,
+      "theta": 0.331147,
+      "phi": 0.718178,
+      "kappa": 366.46,
+      "size": 559
+    },
+    {
+      "id": 59,
+      "label": "cluster-59",
+      "domain": 6,
+      "theta": 1.374712,
+      "phi": 3.982594,
+      "kappa": 323.168,
+      "size": 456
+    },
+    {
+      "id": 60,
+      "label": "cluster-60",
+      "domain": 11,
+      "theta": 1.531514,
+      "phi": 1.22986,
+      "kappa": 317.944,
+      "size": 313
+    },
+    {
+      "id": 61,
+      "label": "cluster-61",
+      "domain": 2,
+      "theta": 0.673079,
+      "phi": 0.41562,
+      "kappa": 393.474,
+      "size": 421
+    },
+    {
+      "id": 62,
+      "label": "cluster-62",
+      "domain": 2,
+      "theta": 1.082959,
+      "phi": 1.64723,
+      "kappa": 355.447,
+      "size": 491
+    },
+    {
+      "id": 63,
+      "label": "cluster-63",
+      "domain": 9,
+      "theta": 0.737924,
+      "phi": 5.793801,
+      "kappa": 388.57,
+      "size": 498
+    },
+    {
+      "id": 64,
+      "label": "cluster-64",
+      "domain": 8,
+      "theta": 1.773848,
+      "phi": 5.372721,
+      "kappa": 406.416,
+      "size": 475
+    },
+    {
+      "id": 65,
+      "label": "cluster-65",
+      "domain": 2,
+      "theta": 0.651481,
+      "phi": 2.034101,
+      "kappa": 490.658,
+      "size": 725
+    },
+    {
+      "id": 66,
+      "label": "cluster-66",
+      "domain": 4,
+      "theta": 1.591007,
+      "phi": 4.88093,
+      "kappa": 365.305,
+      "size": 388
+    },
+    {
+      "id": 67,
+      "label": "cluster-67",
+      "domain": 0,
+      "theta": 0.995526,
+      "phi": 3.481513,
+      "kappa": 400.152,
+      "size": 483
+    },
+    {
+      "id": 68,
+      "label": "cluster-68",
+      "domain": 1,
+      "theta": 1.674378,
+      "phi": 0.032278,
+      "kappa": 398.432,
+      "size": 425
+    },
+    {
+      "id": 69,
+      "label": "cluster-69",
+      "domain": 10,
+      "theta": 0.331668,
+      "phi": 3.47917,
+      "kappa": 371.612,
+      "size": 473
+    },
+    {
+      "id": 70,
+      "label": "cluster-70",
+      "domain": 0,
+      "theta": 0.915085,
+      "phi": 2.364394,
+      "kappa": 410.393,
+      "size": 524
+    },
+    {
+      "id": 71,
+      "label": "cluster-71",
+      "domain": 10,
+      "theta": 0.578982,
+      "phi": 4.16016,
+      "kappa": 372.162,
+      "size": 472
+    },
+    {
+      "id": 72,
+      "label": "cluster-72",
+      "domain": 0,
+      "theta": 1.389129,
+      "phi": 2.788705,
+      "kappa": 428.506,
+      "size": 624
+    },
+    {
+      "id": 73,
+      "label": "cluster-73",
+      "domain": 11,
+      "theta": 1.661969,
+      "phi": 0.606605,
+      "kappa": 368.242,
+      "size": 409
+    },
+    {
+      "id": 74,
+      "label": "cluster-74",
+      "domain": 0,
+      "theta": 1.453141,
+      "phi": 3.348346,
+      "kappa": 387.448,
+      "size": 514
+    },
+    {
+      "id": 75,
+      "label": "cluster-75",
+      "domain": 8,
+      "theta": 2.172569,
+      "phi": 5.188345,
+      "kappa": 527.469,
+      "size": 493
+    },
+    {
+      "id": 76,
+      "label": "cluster-76",
+      "domain": 1,
+      "theta": 2.12988,
+      "phi": 0.24221,
+      "kappa": 426.777,
+      "size": 493
+    },
+    {
+      "id": 77,
+      "label": "cluster-77",
+      "domain": 8,
+      "theta": 2.032244,
+      "phi": 4.678732,
+      "kappa": 397.829,
+      "size": 462
+    },
+    {
+      "id": 78,
+      "label": "cluster-78",
+      "domain": 6,
+      "theta": 1.553756,
+      "phi": 4.28475,
+      "kappa": 358.791,
+      "size": 395
+    },
+    {
+      "id": 79,
+      "label": "cluster-79",
+      "domain": 8,
+      "theta": 2.737198,
+      "phi": 4.732662,
+      "kappa": 375.663,
+      "size": 464
+    },
+    {
+      "id": 80,
+      "label": "cluster-80",
+      "domain": 4,
+      "theta": 0.918169,
+      "phi": 4.915089,
+      "kappa": 326.642,
+      "size": 409
+    },
+    {
+      "id": 81,
+      "label": "cluster-81",
+      "domain": 3,
+      "theta": 1.993011,
+      "phi": 2.818972,
+      "kappa": 410.259,
+      "size": 629
+    },
+    {
+      "id": 82,
+      "label": "cluster-82",
+      "domain": 3,
+      "theta": 2.604578,
+      "phi": 3.594908,
+      "kappa": 427.191,
+      "size": 477
+    },
+    {
+      "id": 83,
+      "label": "cluster-83",
+      "domain": 3,
+      "theta": 2.357496,
+      "phi": 2.793621,
+      "kappa": 483.398,
+      "size": 386
+    },
+    {
+      "id": 84,
+      "label": "cluster-84",
+      "domain": 1,
+      "theta": 1.755816,
+      "phi": 5.704671,
+      "kappa": 362.47,
+      "size": 459
+    },
+    {
+      "id": 85,
+      "label": "cluster-85",
+      "domain": 3,
+      "theta": 2.956258,
+      "phi": 3.737245,
+      "kappa": 450.6,
+      "size": 531
+    },
+    {
+      "id": 86,
+      "label": "cluster-86",
+      "domain": 5,
+      "theta": 1.612386,
+      "phi": 1.831928,
+      "kappa": 345.768,
+      "size": 500
+    },
+    {
+      "id": 87,
+      "label": "cluster-87",
+      "domain": 1,
+      "theta": 2.659356,
+      "phi": 6.214674,
+      "kappa": 300.778,
+      "size": 513
+    },
+    {
+      "id": 88,
+      "label": "cluster-88",
+      "domain": 7,
+      "theta": 2.192258,
+      "phi": 0.98262,
+      "kappa": 369.999,
+      "size": 540
+    },
+    {
+      "id": 89,
+      "label": "cluster-89",
+      "domain": 6,
+      "theta": 2.018392,
+      "phi": 3.85884,
+      "kappa": 528.074,
+      "size": 521
+    },
+    {
+      "id": 90,
+      "label": "cluster-90",
+      "domain": 4,
+      "theta": 1.375681,
+      "phi": 4.583419,
+      "kappa": 406.874,
+      "size": 494
+    },
+    {
+      "id": 91,
+      "label": "cluster-91",
+      "domain": 7,
+      "theta": 2.585487,
+      "phi": 0.978757,
+      "kappa": 350.431,
+      "size": 505
+    },
+    {
+      "id": 92,
+      "label": "cluster-92",
+      "domain": 6,
+      "theta": 1.562659,
+      "phi": 3.703264,
+      "kappa": 362.372,
+      "size": 433
+    },
+    {
+      "id": 93,
+      "label": "cluster-93",
+      "domain": 9,
+      "theta": 0.954856,
+      "phi": 0.353793,
+      "kappa": 336.838,
+      "size": 437
+    },
+    {
+      "id": 94,
+      "label": "cluster-94",
+      "domain": 5,
+      "theta": 1.407083,
+      "phi": 2.407703,
+      "kappa": 309.559,
+      "size": 357
+    },
+    {
+      "id": 95,
+      "label": "cluster-95",
+      "domain": 7,
+      "theta": 2.220705,
+      "phi": 1.747631,
+      "kappa": 382.682,
+      "size": 478
+    },
+    {
+      "id": 96,
+      "label": "cluster-96",
+      "domain": 11,
+      "theta": 1.229661,
+      "phi": 0.935519,
+      "kappa": 332.042,
+      "size": 435
+    },
+    {
+      "id": 97,
+      "label": "cluster-97",
+      "domain": 1,
+      "theta": 2.29966,
+      "phi": 5.769575,
+      "kappa": 430.075,
+      "size": 629
+    },
+    {
+      "id": 98,
+      "label": "cluster-98",
+      "domain": 1,
+      "theta": 1.847754,
+      "phi": 6.234211,
+      "kappa": 473.51,
+      "size": 531
+    },
+    {
+      "id": 99,
+      "label": "cluster-99",
+      "domain": 10,
+      "theta": 0.45807,
+      "phi": 5.480558,
+      "kappa": 378.594,
+      "size": 516
+    },
+    {
+      "id": 100,
+      "label": "cluster-100",
+      "domain": 10,
+      "theta": 0.579085,
+      "phi": 4.891427,
+      "kappa": 325.787,
+      "size": 408
+    },
+    {
+      "id": 101,
+      "label": "cluster-101",
+      "domain": 4,
+      "theta": 0.950862,
+      "phi": 4.265493,
+      "kappa": 401.282,
+      "size": 449
+    },
+    {
+      "id": 102,
+      "label": "cluster-102",
+      "domain": 2,
+      "theta": 0.827106,
+      "phi": 1.064244,
+      "kappa": 369.524,
+      "size": 603
+    },
+    {
+      "id": 103,
+      "label": "cluster-103",
+      "domain": 3,
+      "theta": 2.669262,
+      "phi": 2.438577,
+      "kappa": 372.604,
+      "size": 537
+    },
+    {
+      "id": 104,
+      "label": "cluster-104",
+      "domain": 0,
+      "theta": 0.736329,
+      "phi": 3.244774,
+      "kappa": 471.53,
+      "size": 584
+    },
+    {
+      "id": 105,
+      "label": "cluster-105",
+      "domain": 5,
+      "theta": 1.884358,
+      "phi": 2.247629,
+      "kappa": 356.61,
+      "size": 415
+    },
+    {
+      "id": 106,
+      "label": "cluster-106",
+      "domain": 0,
+      "theta": 0.951884,
+      "phi": 2.840611,
+      "kappa": 474.888,
+      "size": 490
+    },
+    {
+      "id": 107,
+      "label": "cluster-107",
+      "domain": 8,
+      "theta": 2.357227,
+      "phi": 4.378906,
+      "kappa": 448.089,
+      "size": 535
+    },
+    {
+      "id": 108,
+      "label": "cluster-108",
+      "domain": 6,
+      "theta": 2.102863,
+      "phi": 3.441801,
+      "kappa": 363.148,
+      "size": 437
+    },
+    {
+      "id": 109,
+      "label": "cluster-109",
+      "domain": 2,
+      "theta": 0.760648,
+      "phi": 1.603462,
+      "kappa": 491.359,
+      "size": 577
+    },
+    {
+      "id": 110,
+      "label": "cluster-110",
+      "domain": 5,
+      "theta": 1.211123,
+      "phi": 1.818046,
+      "kappa": 408.254,
+      "size": 404
+    },
+    {
+      "id": 111,
+      "label": "cluster-111",
+      "domain": 10,
+      "theta": 0.011946,
+      "phi": 4.55343,
+      "kappa": 968.297,
+      "size": 1595
+    },
+    {
+      "id": 112,
+      "label": "cluster-112",
+      "domain": 5,
+      "theta": 1.712896,
+      "phi": 1.502825,
+      "kappa": 437.423,
+      "size": 670
+    },
+    {
+      "id": 113,
+      "label": "cluster-113",
+      "domain": 2,
+      "theta": 0.426673,
+      "phi": 1.86385,
+      "kappa": 292.392,
+      "size": 479
+    },
+    {
+      "id": 114,
+      "label": "cluster-114",
+      "domain": 6,
+      "theta": 1.826378,
+      "phi": 3.219872,
+      "kappa": 397.75,
+      "size": 457
+    },
+    {
+      "id": 115,
+      "label": "cluster-115",
+      "domain": 6,
+      "theta": 2.362254,
+      "phi": 3.984824,
+      "kappa": 396.317,
+      "size": 382
+    },
+    {
+      "id": 116,
+      "label": "cluster-116",
+      "domain": 7,
+      "theta": 2.585002,
+      "phi": 1.646379,
+      "kappa": 344.4,
+      "size": 539
+    },
+    {
+      "id": 117,
+      "label": "cluster-117",
+      "domain": 7,
+      "theta": 2.037421,
+      "phi": 1.381416,
+      "kappa": 348.905,
+      "size": 537
+    },
+    {
+      "id": 118,
+      "label": "cluster-118",
+      "domain": 10,
+      "theta": 0.458646,
+      "phi": 3.058121,
+      "kappa": 356.758,
+      "size": 460
+    },
+    {
+      "id": 119,
+      "label": "cluster-119",
+      "domain": 3,
+      "theta": 2.399872,
+      "phi": 3.211643,
+      "kappa": 455.464,
+      "size": 492
+    },
+    {
+      "id": 120,
+      "label": "cluster-120",
+      "domain": 9,
+      "theta": 1.415712,
+      "phi": 5.864224,
+      "kappa": 319.635,
+      "size": 439
+    },
+    {
+      "id": 121,
+      "label": "cluster-121",
+      "domain": 6,
+      "theta": 1.886773,
+      "phi": 4.313244,
+      "kappa": 352.38,
+      "size": 455
+    },
+    {
+      "id": 122,
+      "label": "cluster-122",
+      "domain": 4,
+      "theta": 1.287985,
+      "phi": 5.096361,
+      "kappa": 394.37,
+      "size": 503
+    },
+    {
+      "id": 123,
+      "label": "cluster-123",
+      "domain": 11,
+      "theta": 1.309647,
+      "phi": 1.275016,
+      "kappa": 355.508,
+      "size": 547
+    },
+    {
+      "id": 124,
+      "label": "cluster-124",
+      "domain": 7,
+      "theta": 2.052389,
+      "phi": 0.569898,
+      "kappa": 365.02,
+      "size": 553
+    },
+    {
+      "id": 125,
+      "label": "cluster-125",
+      "domain": 4,
+      "theta": 1.095163,
+      "phi": 4.544109,
+      "kappa": 535.936,
+      "size": 489
+    },
+    {
+      "id": 126,
+      "label": "cluster-126",
+      "domain": 9,
+      "theta": 0.835647,
+      "phi": 5.578951,
+      "kappa": 364.077,
+      "size": 493
+    },
+    {
+      "id": 127,
+      "label": "cluster-127",
+      "domain": 9,
+      "theta": 1.290284,
+      "phi": 5.56067,
+      "kappa": 438.321,
+      "size": 444
+    },
+    {
+      "id": 128,
+      "label": "cluster-128",
+      "domain": 7,
+      "theta": 2.980639,
+      "phi": 0.826223,
+      "kappa": 470.135,
+      "size": 697
+    },
+    {
+      "id": 129,
+      "label": "cluster-129",
+      "domain": 7,
+      "theta": 2.391811,
+      "phi": 0.429966,
+      "kappa": 430.672,
+      "size": 439
+    },
+    {
+      "id": 130,
+      "label": "cluster-130",
+      "domain": 11,
+      "theta": 1.548811,
+      "phi": 0.325855,
+      "kappa": 425.319,
+      "size": 551
+    },
+    {
+      "id": 131,
+      "label": "cluster-131",
+      "domain": 3,
+      "theta": 2.327132,
+      "phi": 2.377744,
+      "kappa": 383.675,
+      "size": 468
+    },
+    {
+      "id": 132,
+      "label": "cluster-132",
+      "domain": 6,
+      "theta": 1.900184,
+      "phi": 3.734982,
+      "kappa": 449.317,
+      "size": 518
+    },
+    {
+      "id": 133,
+      "label": "cluster-133",
+      "domain": 10,
+      "theta": 0.795484,
+      "phi": 4.013802,
+      "kappa": 486.307,
+      "size": 636
+    },
+    {
+      "id": 134,
+      "label": "cluster-134",
+      "domain": 5,
+      "theta": 1.832444,
+      "phi": 1.87911,
+      "kappa": 413.13,
+      "size": 552
+    },
+    {
+      "id": 135,
+      "label": "cluster-135",
+      "domain": 3,
+      "theta": 3.016926,
+      "phi": 2.809256,
+      "kappa": 621.767,
+      "size": 635
+    },
+    {
+      "id": 136,
+      "label": "cluster-136",
+      "domain": 9,
+      "theta": 0.75548,
+      "phi": 6.258705,
+      "kappa": 357.513,
+      "size": 441
+    },
+    {
+      "id": 137,
+      "label": "cluster-137",
+      "domain": 6,
+      "theta": 1.573726,
+      "phi": 3.490549,
+      "kappa": 410.796,
+      "size": 526
+    },
+    {
+      "id": 138,
+      "label": "cluster-138",
+      "domain": 11,
+      "theta": 1.77865,
+      "phi": 0.935674,
+      "kappa": 369.032,
+      "size": 494
+    },
+    {
+      "id": 139,
+      "label": "cluster-139",
+      "domain": 8,
+      "theta": 1.947464,
+      "phi": 5.327419,
+      "kappa": 348.715,
+      "size": 471
+    },
+    {
+      "id": 140,
+      "label": "cluster-140",
+      "domain": 1,
+      "theta": 2.188666,
+      "phi": 0.009926,
+      "kappa": 333.029,
+      "size": 493
+    },
+    {
+      "id": 141,
+      "label": "cluster-141",
+      "domain": 4,
+      "theta": 1.735362,
+      "phi": 4.738603,
+      "kappa": 382.777,
+      "size": 335
+    },
+    {
+      "id": 142,
+      "label": "cluster-142",
+      "domain": 0,
+      "theta": 1.502807,
+      "phi": 2.616355,
+      "kappa": 355.334,
+      "size": 370
+    },
+    {
+      "id": 143,
+      "label": "cluster-143",
+      "domain": 5,
+      "theta": 1.503507,
+      "phi": 2.016525,
+      "kappa": 310.693,
+      "size": 465
+    },
+    {
+      "id": 144,
+      "label": "cluster-144",
+      "domain": 9,
+      "theta": 1.028252,
+      "phi": 5.975489,
+      "kappa": 456.178,
+      "size": 669
+    },
+    {
+      "id": 145,
+      "label": "cluster-145",
+      "domain": 4,
+      "theta": 1.639087,
+      "phi": 5.099046,
+      "kappa": 391.405,
+      "size": 544
+    },
+    {
+      "id": 146,
+      "label": "cluster-146",
+      "domain": 9,
+      "theta": 1.106908,
+      "phi": 0.000669,
+      "kappa": 394.346,
+      "size": 563
+    },
+    {
+      "id": 147,
+      "label": "cluster-147",
+      "domain": 8,
+      "theta": 2.036455,
+      "phi": 4.905806,
+      "kappa": 413.123,
+      "size": 398
+    },
+    {
+      "id": 148,
+      "label": "cluster-148",
+      "domain": 8,
+      "theta": 2.431954,
+      "phi": 5.070444,
+      "kappa": 324.46,
+      "size": 327
+    },
+    {
+      "id": 149,
+      "label": "cluster-149",
+      "domain": 11,
+      "theta": 1.403625,
+      "phi": 1.062993,
+      "kappa": 371.382,
+      "size": 504
+    },
+    {
+      "id": 150,
+      "label": "cluster-150",
+      "domain": 0,
+      "theta": 0.914134,
+      "phi": 3.657548,
+      "kappa": 460.547,
+      "size": 578
+    },
+    {
+      "id": 151,
+      "label": "cluster-151",
+      "domain": 8,
+      "theta": 2.72878,
+      "phi": 5.332075,
+      "kappa": 432.161,
+      "size": 550
+    },
+    {
+      "id": 152,
+      "label": "cluster-152",
+      "domain": 8,
+      "theta": 2.258637,
+      "phi": 5.529335,
+      "kappa": 424.231,
+      "size": 429
+    },
+    {
+      "id": 153,
+      "label": "cluster-153",
+      "domain": 10,
+      "theta": 0.125622,
+      "phi": 5.847318,
+      "kappa": 665.538,
+      "size": 634
+    },
+    {
+      "id": 154,
+      "label": "cluster-154",
+      "domain": 0,
+      "theta": 1.136814,
+      "phi": 3.311243,
+      "kappa": 320.341,
+      "size": 336
+    },
+    {
+      "id": 155,
+      "label": "cluster-155",
+      "domain": 8,
+      "theta": 2.833383,
+      "phi": 4.369892,
+      "kappa": 391.422,
+      "size": 453
+    },
+    {
+      "id": 156,
+      "label": "cluster-156",
+      "domain": 9,
+      "theta": 1.469123,
+      "phi": 6.26081,
+      "kappa": 333.388,
+      "size": 376
+    },
+    {
+      "id": 157,
+      "label": "cluster-157",
+      "domain": 0,
+      "theta": 1.570263,
+      "phi": 2.813716,
+      "kappa": 347.631,
+      "size": 485
+    },
+    {
+      "id": 158,
+      "label": "cluster-158",
+      "domain": 6,
+      "theta": 1.213054,
+      "phi": 3.814182,
+      "kappa": 417.79,
+      "size": 422
+    },
+    {
+      "id": 159,
+      "label": "cluster-159",
+      "domain": 2,
+      "theta": 0.656481,
+      "phi": 0.823511,
+      "kappa": 384.471,
+      "size": 498
+    },
+    {
+      "id": 160,
+      "label": "cluster-160",
+      "domain": 9,
+      "theta": 0.795303,
+      "phi": 0.225415,
+      "kappa": 466.73,
+      "size": 591
+    },
+    {
+      "id": 161,
+      "label": "cluster-161",
+      "domain": 4,
+      "theta": 1.413728,
+      "phi": 5.398109,
+      "kappa": 334.011,
+      "size": 558
+    },
+    {
+      "id": 162,
+      "label": "cluster-162",
+      "domain": 6,
+      "theta": 1.165101,
+      "phi": 3.980574,
+      "kappa": 361.585,
+      "size": 451
+    },
+    {
+      "id": 163,
+      "label": "cluster-163",
+      "domain": 0,
+      "theta": 1.680225,
+      "phi": 3.150416,
+      "kappa": 557.251,
+      "size": 562
+    },
+    {
+      "id": 164,
+      "label": "cluster-164",
+      "domain": 3,
+      "theta": 2.181442,
+      "phi": 2.791884,
+      "kappa": 460.386,
+      "size": 518
+    },
+    {
+      "id": 165,
+      "label": "cluster-165",
+      "domain": 2,
+      "theta": 0.951384,
+      "phi": 1.236486,
+      "kappa": 403.048,
+      "size": 525
+    },
+    {
+      "id": 166,
+      "label": "cluster-166",
+      "domain": 5,
+      "theta": 1.945141,
+      "phi": 2.447858,
+      "kappa": 375.671,
+      "size": 446
+    },
+    {
+      "id": 167,
+      "label": "cluster-167",
+      "domain": 2,
+      "theta": 0.973869,
+      "phi": 2.09607,
+      "kappa": 326.498,
+      "size": 366
+    },
+    {
+      "id": 168,
+      "label": "cluster-168",
+      "domain": 2,
+      "theta": 0.647593,
+      "phi": 1.797909,
+      "kappa": 447.712,
+      "size": 546
+    },
+    {
+      "id": 169,
+      "label": "cluster-169",
+      "domain": 10,
+      "theta": 0.604092,
+      "phi": 3.35454,
+      "kappa": 378.722,
+      "size": 445
+    },
+    {
+      "id": 170,
+      "label": "cluster-170",
+      "domain": 1,
+      "theta": 2.454592,
+      "phi": 5.962826,
+      "kappa": 334.46,
+      "size": 686
+    },
+    {
+      "id": 171,
+      "label": "cluster-171",
+      "domain": 0,
+      "theta": 1.076326,
+      "phi": 2.281746,
+      "kappa": 453.476,
+      "size": 483
+    },
+    {
+      "id": 172,
+      "label": "cluster-172",
+      "domain": 1,
+      "theta": 1.887671,
+      "phi": 6.092456,
+      "kappa": 504.1,
+      "size": 485
+    },
+    {
+      "id": 173,
+      "label": "cluster-173",
+      "domain": 6,
+      "theta": 2.085849,
+      "phi": 3.688235,
+      "kappa": 431.951,
+      "size": 473
+    },
+    {
+      "id": 174,
+      "label": "cluster-174",
+      "domain": 5,
+      "theta": 1.83716,
+      "phi": 1.369231,
+      "kappa": 474.701,
+      "size": 561
+    },
+    {
+      "id": 175,
+      "label": "cluster-175",
+      "domain": 6,
+      "theta": 1.355811,
+      "phi": 4.171568,
+      "kappa": 359.354,
+      "size": 468
+    },
+    {
+      "id": 176,
+      "label": "cluster-176",
+      "domain": 11,
+      "theta": 1.021601,
+      "phi": 0.847336,
+      "kappa": 373.467,
+      "size": 421
+    },
+    {
+      "id": 177,
+      "label": "cluster-177",
+      "domain": 7,
+      "theta": 2.782057,
+      "phi": 0.820242,
+      "kappa": 348.29,
+      "size": 504
+    },
+    {
+      "id": 178,
+      "label": "cluster-178",
+      "domain": 5,
+      "theta": 2.216846,
+      "phi": 2.176858,
+      "kappa": 417.113,
+      "size": 438
+    },
+    {
+      "id": 179,
+      "label": "cluster-179",
+      "domain": 7,
+      "theta": 2.141198,
+      "phi": 0.779753,
+      "kappa": 336.194,
+      "size": 523
+    },
+    {
+      "id": 180,
+      "label": "cluster-180",
+      "domain": 11,
+      "theta": 1.506047,
+      "phi": 0.737235,
+      "kappa": 396.212,
+      "size": 645
+    },
+    {
+      "id": 181,
+      "label": "cluster-181",
+      "domain": 11,
+      "theta": 1.244072,
+      "phi": 0.355153,
+      "kappa": 453.135,
+      "size": 443
+    },
+    {
+      "id": 182,
+      "label": "cluster-182",
+      "domain": 11,
+      "theta": 1.865505,
+      "phi": 0.539145,
+      "kappa": 306.583,
+      "size": 459
+    },
+    {
+      "id": 183,
+      "label": "cluster-183",
+      "domain": 4,
+      "theta": 0.912824,
+      "phi": 5.201125,
+      "kappa": 422.01,
+      "size": 570
+    },
+    {
+      "id": 184,
+      "label": "cluster-184",
+      "domain": 6,
+      "theta": 1.913572,
+      "phi": 4.089684,
+      "kappa": 475.132,
+      "size": 652
+    },
+    {
+      "id": 185,
+      "label": "cluster-185",
+      "domain": 7,
+      "theta": 1.968968,
+      "phi": 0.962058,
+      "kappa": 317.707,
+      "size": 638
+    },
+    {
+      "id": 186,
+      "label": "cluster-186",
+      "domain": 11,
+      "theta": 1.728485,
+      "phi": 0.767909,
+      "kappa": 339.643,
+      "size": 474
+    },
+    {
+      "id": 187,
+      "label": "cluster-187",
+      "domain": 5,
+      "theta": 2.037098,
+      "phi": 1.874387,
+      "kappa": 371.002,
+      "size": 507
+    },
+    {
+      "id": 188,
+      "label": "cluster-188",
+      "domain": 1,
+      "theta": 1.948819,
+      "phi": 5.750947,
+      "kappa": 342.445,
+      "size": 428
+    },
+    {
+      "id": 189,
+      "label": "cluster-189",
+      "domain": 3,
+      "theta": 2.490703,
+      "phi": 2.610943,
+      "kappa": 382.122,
+      "size": 558
+    },
+    {
+      "id": 190,
+      "label": "cluster-190",
+      "domain": 7,
+      "theta": 2.528045,
+      "phi": 0.254254,
+      "kappa": 365.126,
+      "size": 402
+    },
+    {
+      "id": 191,
+      "label": "cluster-191",
+      "domain": 3,
+      "theta": 2.314191,
+      "phi": 3.410598,
+      "kappa": 454.281,
+      "size": 467
+    },
+    {
+      "id": 192,
+      "label": "cluster-192",
+      "domain": 5,
+      "theta": 2.222019,
+      "phi": 1.965312,
+      "kappa": 421.726,
+      "size": 499
+    },
+    {
+      "id": 193,
+      "label": "cluster-193",
+      "domain": 4,
+      "theta": 1.23667,
+      "phi": 4.477843,
+      "kappa": 511.228,
+      "size": 541
+    },
+    {
+      "id": 194,
+      "label": "cluster-194",
+      "domain": 2,
+      "theta": 0.410094,
+      "phi": 0.230161,
+      "kappa": 396.875,
+      "size": 475
+    },
+    {
+      "id": 195,
+      "label": "cluster-195",
+      "domain": 0,
+      "theta": 1.456056,
+      "phi": 2.979331,
+      "kappa": 349.849,
+      "size": 319
+    },
+    {
+      "id": 196,
+      "label": "cluster-196",
+      "domain": 3,
+      "theta": 3.140746,
+      "phi": 1.526318,
+      "kappa": 952.661,
+      "size": 1681
+    },
+    {
+      "id": 197,
+      "label": "cluster-197",
+      "domain": 7,
+      "theta": 2.536619,
+      "phi": 0.632788,
+      "kappa": 342.725,
+      "size": 522
+    },
+    {
+      "id": 198,
+      "label": "cluster-198",
+      "domain": 9,
+      "theta": 1.575299,
+      "phi": 5.746283,
+      "kappa": 390.583,
+      "size": 473
+    },
+    {
+      "id": 199,
+      "label": "cluster-199",
+      "domain": 5,
+      "theta": 1.731912,
+      "phi": 2.340486,
+      "kappa": 439.58,
+      "size": 460
+    },
+    {
+      "id": 200,
+      "label": "cluster-200",
+      "domain": 10,
+      "theta": 0.639382,
+      "phi": 4.487952,
+      "kappa": 394.559,
+      "size": 403
+    },
+    {
+      "id": 201,
+      "label": "cluster-201",
+      "domain": 2,
+      "theta": 1.004712,
+      "phi": 1.852286,
+      "kappa": 376.761,
+      "size": 480
+    },
+    {
+      "id": 202,
+      "label": "cluster-202",
+      "domain": 9,
+      "theta": 0.823429,
+      "phi": 6.006487,
+      "kappa": 369.694,
+      "size": 435
+    },
+    {
+      "id": 203,
+      "label": "cluster-203",
+      "domain": 8,
+      "theta": 2.221458,
+      "phi": 4.556525,
+      "kappa": 425.692,
+      "size": 566
+    },
+    {
+      "id": 204,
+      "label": "cluster-204",
+      "domain": 8,
+      "theta": 2.560811,
+      "phi": 4.465605,
+      "kappa": 397.983,
+      "size": 476
+    },
+    {
+      "id": 205,
+      "label": "cluster-205",
+      "domain": 9,
+      "theta": 0.556166,
+      "phi": 5.767766,
+      "kappa": 433.128,
+      "size": 452
+    },
+    {
+      "id": 206,
+      "label": "cluster-206",
+      "domain": 11,
+      "theta": 1.153891,
+      "phi": 0.693157,
+      "kappa": 381.899,
+      "size": 428
+    },
+    {
+      "id": 207,
+      "label": "cluster-207",
+      "domain": 0,
+      "theta": 0.99608,
+      "phi": 3.025264,
+      "kappa": 625.51,
+      "size": 728
+    },
+    {
+      "id": 208,
+      "label": "cluster-208",
+      "domain": 1,
+      "theta": 1.86064,
+      "phi": 5.518821,
+      "kappa": 358.59,
+      "size": 481
+    },
+    {
+      "id": 209,
+      "label": "cluster-209",
+      "domain": 9,
+      "theta": 1.188978,
+      "phi": 5.910207,
+      "kappa": 408.273,
+      "size": 621
+    },
+    {
+      "id": 210,
+      "label": "cluster-210",
+      "domain": 0,
+      "theta": 1.226734,
+      "phi": 2.756175,
+      "kappa": 506.385,
+      "size": 608
+    },
+    {
+      "id": 211,
+      "label": "cluster-211",
+      "domain": 2,
+      "theta": 0.260834,
+      "phi": 1.434359,
+      "kappa": 404.34,
+      "size": 488
+    },
+    {
+      "id": 212,
+      "label": "cluster-212",
+      "domain": 0,
+      "theta": 0.730077,
+      "phi": 2.439378,
+      "kappa": 343.906,
+      "size": 426
+    },
+    {
+      "id": 213,
+      "label": "cluster-213",
+      "domain": 3,
+      "theta": 1.943083,
+      "phi": 2.997469,
+      "kappa": 395.212,
+      "size": 443
+    },
+    {
+      "id": 214,
+      "label": "cluster-214",
+      "domain": 4,
+      "theta": 1.263343,
+      "phi": 5.257574,
+      "kappa": 443.332,
+      "size": 598
+    },
+    {
+      "id": 215,
+      "label": "cluster-215",
+      "domain": 5,
+      "theta": 1.424478,
+      "phi": 1.794549,
+      "kappa": 327.299,
+      "size": 406
+    },
+    {
+      "id": 216,
+      "label": "cluster-216",
+      "domain": 7,
+      "theta": 2.673416,
+      "phi": 1.331144,
+      "kappa": 410.941,
+      "size": 460
+    },
+    {
+      "id": 217,
+      "label": "cluster-217",
+      "domain": 0,
+      "theta": 0.907877,
+      "phi": 2.598775,
+      "kappa": 423.77,
+      "size": 478
+    },
+    {
+      "id": 218,
+      "label": "cluster-218",
+      "domain": 7,
+      "theta": 2.386769,
+      "phi": 0.850978,
+      "kappa": 345.13,
+      "size": 478
+    },
+    {
+      "id": 219,
+      "label": "cluster-219",
+      "domain": 2,
+      "theta": 0.772853,
+      "phi": 2.164389,
+      "kappa": 374.271,
+      "size": 478
+    },
+    {
+      "id": 220,
+      "label": "cluster-220",
+      "domain": 10,
+      "theta": 0.503618,
+      "phi": 3.652384,
+      "kappa": 351.705,
+      "size": 395
+    },
+    {
+      "id": 221,
+      "label": "cluster-221",
+      "domain": 3,
+      "theta": 2.549351,
+      "phi": 3.925348,
+      "kappa": 420.448,
+      "size": 409
+    },
+    {
+      "id": 222,
+      "label": "cluster-222",
+      "domain": 7,
+      "theta": 2.20938,
+      "phi": 1.240377,
+      "kappa": 397.807,
+      "size": 463
+    },
+    {
+      "id": 223,
+      "label": "cluster-223",
+      "domain": 10,
+      "theta": 0.391549,
+      "phi": 4.062831,
+      "kappa": 360.413,
+      "size": 410
+    },
+    {
+      "id": 224,
+      "label": "cluster-224",
+      "domain": 1,
+      "theta": 2.242548,
+      "phi": 6.049525,
+      "kappa": 290.477,
+      "size": 489
+    },
+    {
+      "id": 225,
+      "label": "cluster-225",
+      "domain": 6,
+      "theta": 1.587765,
+      "phi": 3.920175,
+      "kappa": 352.761,
+      "size": 369
+    },
+    {
+      "id": 226,
+      "label": "cluster-226",
+      "domain": 2,
+      "theta": 0.500979,
+      "phi": 0.915324,
+      "kappa": 403.845,
+      "size": 383
+    },
+    {
+      "id": 227,
+      "label": "cluster-227",
+      "domain": 8,
+      "theta": 2.044034,
+      "phi": 4.484736,
+      "kappa": 370.942,
+      "size": 489
+    },
+    {
+      "id": 228,
+      "label": "cluster-228",
+      "domain": 5,
+      "theta": 1.850226,
+      "phi": 2.045427,
+      "kappa": 426.146,
+      "size": 612
+    },
+    {
+      "id": 229,
+      "label": "cluster-229",
+      "domain": 0,
+      "theta": 1.088507,
+      "phi": 3.68532,
+      "kappa": 470.907,
+      "size": 553
+    },
+    {
+      "id": 230,
+      "label": "cluster-230",
+      "domain": 6,
+      "theta": 1.405769,
+      "phi": 3.796746,
+      "kappa": 386.528,
+      "size": 419
+    },
+    {
+      "id": 231,
+      "label": "cluster-231",
+      "domain": 11,
+      "theta": 1.781084,
+      "phi": 1.1162,
+      "kappa": 384.857,
+      "size": 507
+    },
+    {
+      "id": 232,
+      "label": "cluster-232",
+      "domain": 3,
+      "theta": 2.768084,
+      "phi": 3.799317,
+      "kappa": 406.898,
+      "size": 423
+    },
+    {
+      "id": 233,
+      "label": "cluster-233",
+      "domain": 11,
+      "theta": 1.411253,
+      "phi": 0.391895,
+      "kappa": 441.036,
+      "size": 364
+    },
+    {
+      "id": 234,
+      "label": "cluster-234",
+      "domain": 4,
+      "theta": 1.287835,
+      "phi": 4.893182,
+      "kappa": 373.403,
+      "size": 377
+    },
+    {
+      "id": 235,
+      "label": "cluster-235",
+      "domain": 4,
+      "theta": 0.759378,
+      "phi": 4.729694,
+      "kappa": 416.31,
+      "size": 522
+    },
+    {
+      "id": 236,
+      "label": "cluster-236",
+      "domain": 5,
+      "theta": 1.309568,
+      "phi": 1.473044,
+      "kappa": 365.079,
+      "size": 519
+    },
+    {
+      "id": 237,
+      "label": "cluster-237",
+      "domain": 10,
+      "theta": 0.141177,
+      "phi": 3.026706,
+      "kappa": 565.466,
+      "size": 649
+    },
+    {
+      "id": 238,
+      "label": "cluster-238",
+      "domain": 8,
+      "theta": 1.797245,
+      "phi": 5.156743,
+      "kappa": 366.301,
+      "size": 505
+    },
+    {
+      "id": 239,
+      "label": "cluster-239",
+      "domain": 4,
+      "theta": 1.118477,
+      "phi": 4.911325,
+      "kappa": 345.449,
+      "size": 351
+    },
+    {
+      "id": 240,
+      "label": "cluster-240",
+      "domain": 7,
+      "theta": 2.861724,
+      "phi": 0.187344,
+      "kappa": 396.98,
+      "size": 598
+    },
+    {
+      "id": 241,
+      "label": "cluster-241",
+      "domain": 9,
+      "theta": 1.261406,
+      "phi": 5.73981,
+      "kappa": 353.297,
+      "size": 451
+    },
+    {
+      "id": 242,
+      "label": "cluster-242",
+      "domain": 4,
+      "theta": 1.546605,
+      "phi": 4.672715,
+      "kappa": 431.413,
+      "size": 489
+    },
+    {
+      "id": 243,
+      "label": "cluster-243",
+      "domain": 4,
+      "theta": 1.53233,
+      "phi": 4.490865,
+      "kappa": 423.881,
+      "size": 399
+    },
+    {
+      "id": 244,
+      "label": "cluster-244",
+      "domain": 7,
+      "theta": 2.393188,
+      "phi": 1.60106,
+      "kappa": 399.063,
+      "size": 512
+    },
+    {
+      "id": 245,
+      "label": "cluster-245",
+      "domain": 10,
+      "theta": 0.652379,
+      "phi": 3.896654,
+      "kappa": 411.526,
+      "size": 443
+    },
+    {
+      "id": 246,
+      "label": "cluster-246",
+      "domain": 5,
+      "theta": 2.077395,
+      "phi": 2.298799,
+      "kappa": 424.754,
+      "size": 387
+    },
+    {
+      "id": 247,
+      "label": "cluster-247",
+      "domain": 1,
+      "theta": 1.817518,
+      "phi": 0.113342,
+      "kappa": 458.074,
+      "size": 407
+    },
+    {
+      "id": 248,
+      "label": "cluster-248",
+      "domain": 1,
+      "theta": 1.993557,
+      "phi": 0.108555,
+      "kappa": 357.901,
+      "size": 470
+    },
+    {
+      "id": 249,
+      "label": "cluster-249",
+      "domain": 9,
+      "theta": 1.626111,
+      "phi": 5.511911,
+      "kappa": 290.697,
+      "size": 441
+    },
+    {
+      "id": 250,
+      "label": "cluster-250",
+      "domain": 9,
+      "theta": 0.927463,
+      "phi": 5.80278,
+      "kappa": 424.442,
+      "size": 428
+    },
+    {
+      "id": 251,
+      "label": "cluster-251",
+      "domain": 5,
+      "theta": 1.365732,
+      "phi": 2.175465,
+      "kappa": 373.794,
+      "size": 476
+    },
+    {
+      "id": 252,
+      "label": "cluster-252",
+      "domain": 9,
+      "theta": 1.290117,
+      "phi": 6.23855,
+      "kappa": 369.567,
+      "size": 546
+    },
+    {
+      "id": 253,
+      "label": "cluster-253",
+      "domain": 3,
+      "theta": 2.743146,
+      "phi": 3.327505,
+      "kappa": 400.982,
+      "size": 444
+    },
+    {
+      "id": 254,
+      "label": "cluster-254",
+      "domain": 6,
+      "theta": 2.079761,
+      "phi": 4.008627,
+      "kappa": 459.448,
+      "size": 623
+    },
+    {
+      "id": 255,
+      "label": "cluster-255",
+      "domain": 4,
+      "theta": 1.385938,
+      "phi": 4.37846,
+      "kappa": 420.55,
+      "size": 451
+    },
+    {
+      "id": 256,
+      "label": "cluster-256",
+      "domain": 10,
+      "theta": 0.394536,
+      "phi": 2.571254,
+      "kappa": 392.465,
+      "size": 484
+    },
+    {
+      "id": 257,
+      "label": "cluster-257",
+      "domain": 5,
+      "theta": 1.530839,
+      "phi": 1.430375,
+      "kappa": 350.526,
+      "size": 485
+    },
+    {
+      "id": 258,
+      "label": "cluster-258",
+      "domain": 1,
+      "theta": 1.684609,
+      "phi": 6.111025,
+      "kappa": 315.17,
+      "size": 432
+    },
+    {
+      "id": 259,
+      "label": "cluster-259",
+      "domain": 11,
+      "theta": 1.702915,
+      "phi": 0.417656,
+      "kappa": 374.316,
+      "size": 446
+    },
+    {
+      "id": 260,
+      "label": "cluster-260",
+      "domain": 5,
+      "theta": 1.886993,
+      "phi": 2.65268,
+      "kappa": 390.013,
+      "size": 386
+    },
+    {
+      "id": 261,
+      "label": "cluster-261",
+      "domain": 0,
+      "theta": 0.92617,
+      "phi": 3.201033,
+      "kappa": 356.067,
+      "size": 433
+    },
+    {
+      "id": 262,
+      "label": "cluster-262",
+      "domain": 1,
+      "theta": 1.832575,
+      "phi": 5.922082,
+      "kappa": 385.438,
+      "size": 461
+    },
+    {
+      "id": 263,
+      "label": "cluster-263",
+      "domain": 6,
+      "theta": 1.755257,
+      "phi": 4.183018,
+      "kappa": 415.654,
+      "size": 557
+    },
+    {
+      "id": 264,
+      "label": "cluster-264",
+      "domain": 9,
+      "theta": 0.656106,
+      "phi": 5.520118,
+      "kappa": 451.55,
+      "size": 580
+    },
+    {
+      "id": 265,
+      "label": "cluster-265",
+      "domain": 2,
+      "theta": 0.776758,
+      "phi": 0.601645,
+      "kappa": 374.546,
+      "size": 377
+    },
+    {
+      "id": 266,
+      "label": "cluster-266",
+      "domain": 4,
+      "theta": 0.899408,
+      "phi": 4.658863,
+      "kappa": 507.811,
+      "size": 546
+    },
+    {
+      "id": 267,
+      "label": "cluster-267",
+      "domain": 4,
+      "theta": 1.41228,
+      "phi": 4.767273,
+      "kappa": 380.797,
+      "size": 413
+    },
+    {
+      "id": 268,
+      "label": "cluster-268",
+      "domain": 0,
+      "theta": 0.818594,
+      "phi": 3.450131,
+      "kappa": 441.87,
+      "size": 519
+    },
+    {
+      "id": 269,
+      "label": "cluster-269",
+      "domain": 3,
+      "theta": 2.578295,
+      "phi": 3.215898,
+      "kappa": 442.007,
+      "size": 502
+    },
+    {
+      "id": 270,
+      "label": "cluster-270",
+      "domain": 11,
+      "theta": 1.605038,
+      "phi": 1.067582,
+      "kappa": 384.769,
+      "size": 496
+    },
+    {
+      "id": 271,
+      "label": "cluster-271",
+      "domain": 4,
+      "theta": 1.611436,
+      "phi": 5.294128,
+      "kappa": 348.076,
+      "size": 467
+    },
+    {
+      "id": 272,
+      "label": "cluster-272",
+      "domain": 8,
+      "theta": 1.887281,
+      "phi": 4.820848,
+      "kappa": 411.418,
+      "size": 487
+    },
+    {
+      "id": 273,
+      "label": "cluster-273",
+      "domain": 9,
+      "theta": 1.097687,
+      "phi": 5.542334,
+      "kappa": 382.077,
+      "size": 504
+    },
+    {
+      "id": 274,
+      "label": "cluster-274",
+      "domain": 10,
+      "theta": 0.757758,
+      "phi": 4.236772,
+      "kappa": 393.784,
+      "size": 473
+    },
+    {
+      "id": 275,
+      "label": "cluster-275",
+      "domain": 2,
+      "theta": 0.608751,
+      "phi": 1.498478,
+      "kappa": 368.631,
+      "size": 457
+    },
+    {
+      "id": 276,
+      "label": "cluster-276",
+      "domain": 2,
+      "theta": 1.13502,
+      "phi": 1.403109,
+      "kappa": 355.624,
+      "size": 357
+    },
+    {
+      "id": 277,
+      "label": "cluster-277",
+      "domain": 5,
+      "theta": 1.75551,
+      "phi": 1.69355,
+      "kappa": 402.933,
+      "size": 511
+    },
+    {
+      "id": 278,
+      "label": "cluster-278",
+      "domain": 0,
+      "theta": 1.05468,
+      "phi": 2.481041,
+      "kappa": 475.78,
+      "size": 616
+    },
+    {
+      "id": 279,
+      "label": "cluster-279",
+      "domain": 5,
+      "theta": 1.136528,
+      "phi": 1.99058,
+      "kappa": 449.562,
+      "size": 417
+    },
+    {
+      "id": 280,
+      "label": "cluster-280",
+      "domain": 0,
+      "theta": 1.261645,
+      "phi": 2.945967,
+      "kappa": 368.236,
+      "size": 377
+    },
+    {
+      "id": 281,
+      "label": "cluster-281",
+      "domain": 5,
+      "theta": 1.607282,
+      "phi": 1.628698,
+      "kappa": 434.665,
+      "size": 546
+    },
+    {
+      "id": 282,
+      "label": "cluster-282",
+      "domain": 9,
+      "theta": 0.934408,
+      "phi": 0.118691,
+      "kappa": 405.136,
+      "size": 577
+    },
+    {
+      "id": 283,
+      "label": "cluster-283",
+      "domain": 3,
+      "theta": 2.507148,
+      "phi": 2.312796,
+      "kappa": 409.122,
+      "size": 549
+    },
+    {
+      "id": 284,
+      "label": "cluster-284",
+      "domain": 7,
+      "theta": 2.207871,
+      "phi": 1.498141,
+      "kappa": 375.631,
+      "size": 434
+    },
+    {
+      "id": 285,
+      "label": "cluster-285",
+      "domain": 4,
+      "theta": 0.752874,
+      "phi": 5.01867,
+      "kappa": 354.119,
+      "size": 389
+    },
+    {
+      "id": 286,
+      "label": "cluster-286",
+      "domain": 4,
+      "theta": 1.460289,
+      "phi": 5.004852,
+      "kappa": 371.937,
+      "size": 414
+    },
+    {
+      "id": 287,
+      "label": "cluster-287",
+      "domain": 1,
+      "theta": 1.539785,
+      "phi": 0.15663,
+      "kappa": 415.264,
+      "size": 419
+    },
+    {
+      "id": 288,
+      "label": "cluster-288",
+      "domain": 1,
+      "theta": 2.202083,
+      "phi": 0.428679,
+      "kappa": 416.503,
+      "size": 640
+    },
+    {
+      "id": 289,
+      "label": "cluster-289",
+      "domain": 3,
+      "theta": 2.4924,
+      "phi": 2.952762,
+      "kappa": 436.126,
+      "size": 489
+    },
+    {
+      "id": 290,
+      "label": "cluster-290",
+      "domain": 3,
+      "theta": 2.312306,
+      "phi": 3.014369,
+      "kappa": 416.746,
+      "size": 414
+    },
+    {
+      "id": 291,
+      "label": "cluster-291",
+      "domain": 3,
+      "theta": 2.589869,
+      "phi": 2.023605,
+      "kappa": 374.692,
+      "size": 506
+    },
+    {
+      "id": 292,
+      "label": "cluster-292",
+      "domain": 10,
+      "theta": 0.37023,
+      "phi": 5.042122,
+      "kappa": 339.899,
+      "size": 510
+    },
+    {
+      "id": 293,
+      "label": "cluster-293",
+      "domain": 0,
+      "theta": 1.306756,
+      "phi": 3.43744,
+      "kappa": 413.051,
+      "size": 431
+    },
+    {
+      "id": 294,
+      "label": "cluster-294",
+      "domain": 11,
+      "theta": 1.129255,
+      "phi": 0.488562,
+      "kappa": 375.766,
+      "size": 489
+    },
+    {
+      "id": 295,
+      "label": "cluster-295",
+      "domain": 1,
+      "theta": 2.303259,
+      "phi": 0.214183,
+      "kappa": 405.28,
+      "size": 546
+    },
+    {
+      "id": 296,
+      "label": "cluster-296",
+      "domain": 10,
+      "theta": 0.17857,
+      "phi": 3.969183,
+      "kappa": 452.042,
+      "size": 646
+    },
+    {
+      "id": 297,
+      "label": "cluster-297",
+      "domain": 11,
+      "theta": 1.24141,
+      "phi": 1.128059,
+      "kappa": 501.944,
+      "size": 654
+    },
+    {
+      "id": 298,
+      "label": "cluster-298",
+      "domain": 8,
+      "theta": 2.048718,
+      "phi": 5.128814,
+      "kappa": 425.832,
+      "size": 619
+    },
+    {
+      "id": 299,
+      "label": "cluster-299",
+      "domain": 7,
+      "theta": 2.368862,
+      "phi": 1.097923,
+      "kappa": 392.392,
+      "size": 463
+    },
+    {
+      "id": 300,
+      "label": "cluster-300",
+      "domain": 9,
+      "theta": 1.442882,
+      "phi": 6.09476,
+      "kappa": 381.419,
+      "size": 414
+    },
+    {
+      "id": 301,
+      "label": "cluster-301",
+      "domain": 0,
+      "theta": 1.323324,
+      "phi": 3.191616,
+      "kappa": 279.126,
+      "size": 333
+    },
+    {
+      "id": 302,
+      "label": "cluster-302",
+      "domain": 10,
+      "theta": 0.57396,
+      "phi": 2.658138,
+      "kappa": 352.141,
+      "size": 413
+    },
+    {
+      "id": 303,
+      "label": "cluster-303",
+      "domain": 10,
+      "theta": 0.602554,
+      "phi": 5.236088,
+      "kappa": 398.954,
+      "size": 495
+    },
+    {
+      "id": 304,
+      "label": "cluster-304",
+      "domain": 0,
+      "theta": 1.797197,
+      "phi": 2.851276,
+      "kappa": 330.22,
+      "size": 427
+    },
+    {
+      "id": 305,
+      "label": "cluster-305",
+      "domain": 3,
+      "theta": 2.468117,
+      "phi": 3.462541,
+      "kappa": 515.982,
+      "size": 459
+    },
+    {
+      "id": 306,
+      "label": "cluster-306",
+      "domain": 8,
+      "theta": 1.87302,
+      "phi": 4.576753,
+      "kappa": 324.636,
+      "size": 417
+    },
+    {
+      "id": 307,
+      "label": "cluster-307",
+      "domain": 11,
+      "theta": 1.403176,
+      "phi": 0.891516,
+      "kappa": 498.543,
+      "size": 594
+    },
+    {
+      "id": 308,
+      "label": "cluster-308",
+      "domain": 4,
+      "theta": 1.103379,
+      "phi": 4.346204,
+      "kappa": 490.028,
+      "size": 516
+    },
+    {
+      "id": 309,
+      "label": "cluster-309",
+      "domain": 2,
+      "theta": 0.889259,
+      "phi": 1.697152,
+      "kappa": 473.443,
+      "size": 575
+    },
+    {
+      "id": 310,
+      "label": "cluster-310",
+      "domain": 6,
+      "theta": 1.56516,
+      "phi": 4.108262,
+      "kappa": 347.869,
+      "size": 426
+    },
+    {
+      "id": 311,
+      "label": "cluster-311",
+      "domain": 8,
+      "theta": 2.634176,
+      "phi": 5.024958,
+      "kappa": 424.84,
+      "size": 465
+    },
+    {
+      "id": 312,
+      "label": "cluster-312",
+      "domain": 8,
+      "theta": 2.205255,
+      "phi": 5.014746,
+      "kappa": 384.488,
+      "size": 383
+    },
+    {
+      "id": 313,
+      "label": "cluster-313",
+      "domain": 5,
+      "theta": 1.700866,
+      "phi": 1.985829,
+      "kappa": 488.416,
+      "size": 589
+    },
+    {
+      "id": 314,
+      "label": "cluster-314",
+      "domain": 5,
+      "theta": 2.054151,
+      "phi": 1.630923,
+      "kappa": 391.248,
+      "size": 473
+    },
+    {
+      "id": 315,
+      "label": "cluster-315",
+      "domain": 6,
+      "theta": 2.200478,
+      "phi": 3.851693,
+      "kappa": 394.597,
+      "size": 585
+    },
+    {
+      "id": 316,
+      "label": "cluster-316",
+      "domain": 4,
+      "theta": 1.090043,
+      "phi": 5.110955,
+      "kappa": 356.477,
+      "size": 445
+    },
+    {
+      "id": 317,
+      "label": "cluster-317",
+      "domain": 8,
+      "theta": 2.471069,
+      "phi": 4.195197,
+      "kappa": 437.448,
+      "size": 510
+    },
+    {
+      "id": 318,
+      "label": "cluster-318",
+      "domain": 8,
+      "theta": 2.517169,
+      "phi": 4.756802,
+      "kappa": 456.289,
+      "size": 535
+    },
+    {
+      "id": 319,
+      "label": "cluster-319",
+      "domain": 3,
+      "theta": 2.285442,
+      "phi": 2.611329,
+      "kappa": 456.142,
+      "size": 523
+    },
+    {
+      "id": 320,
+      "label": "cluster-320",
+      "domain": 0,
+      "theta": 0.643538,
+      "phi": 2.994757,
+      "kappa": 380.888,
+      "size": 333
+    },
+    {
+      "id": 321,
+      "label": "cluster-321",
+      "domain": 8,
+      "theta": 2.11712,
+      "phi": 5.357536,
+      "kappa": 386.675,
+      "size": 415
+    },
+    {
+      "id": 322,
+      "label": "cluster-322",
+      "domain": 3,
+      "theta": 2.028719,
+      "phi": 3.188167,
+      "kappa": 368.901,
+      "size": 432
+    },
+    {
+      "id": 323,
+      "label": "cluster-323",
+      "domain": 11,
+      "theta": 1.706726,
+      "phi": 1.3125,
+      "kappa": 390.426,
+      "size": 615
+    },
+    {
+      "id": 324,
+      "label": "cluster-324",
+      "domain": 8,
+      "theta": 2.874835,
+      "phi": 5.162725,
+      "kappa": 423.534,
+      "size": 612
+    },
+    {
+      "id": 325,
+      "label": "cluster-325",
+      "domain": 8,
+      "theta": 2.64552,
+      "phi": 5.753401,
+      "kappa": 343.654,
+      "size": 480
+    },
+    {
+      "id": 326,
+      "label": "cluster-326",
+      "domain": 1,
+      "theta": 2.162544,
+      "phi": 5.66674,
+      "kappa": 539.451,
+      "size": 642
+    },
+    {
+      "id": 327,
+      "label": "cluster-327",
+      "domain": 8,
+      "theta": 2.833596,
+      "phi": 5.845075,
+      "kappa": 385.409,
+      "size": 609
+    },
+    {
+      "id": 328,
+      "label": "cluster-328",
+      "domain": 3,
+      "theta": 2.843827,
+      "phi": 2.408515,
+      "kappa": 423.423,
+      "size": 455
+    },
+    {
+      "id": 329,
+      "label": "cluster-329",
+      "domain": 9,
+      "theta": 0.596797,
+      "phi": 6.10078,
+      "kappa": 393.961,
+      "size": 411
+    },
+    {
+      "id": 330,
+      "label": "cluster-330",
+      "domain": 0,
+      "theta": 1.229458,
+      "phi": 2.354154,
+      "kappa": 387.793,
+      "size": 421
+    },
+    {
+      "id": 331,
+      "label": "cluster-331",
+      "domain": 3,
+      "theta": 3.002031,
+      "phi": 4.725495,
+      "kappa": 549.624,
+      "size": 609
+    },
+    {
+      "id": 332,
+      "label": "cluster-332",
+      "domain": 4,
+      "theta": 0.9643,
+      "phi": 4.469763,
+      "kappa": 511.148,
+      "size": 492
+    },
+    {
+      "id": 333,
+      "label": "cluster-333",
+      "domain": 10,
+      "theta": 0.186894,
+      "phi": 4.933685,
+      "kappa": 534.901,
+      "size": 657
+    },
+    {
+      "id": 334,
+      "label": "cluster-334",
+      "domain": 11,
+      "theta": 1.028278,
+      "phi": 1.052969,
+      "kappa": 358.415,
+      "size": 457
+    },
+    {
+      "id": 335,
+      "label": "cluster-335",
+      "domain": 6,
+      "theta": 1.429006,
+      "phi": 3.564562,
+      "kappa": 396.795,
+      "size": 468
+    },
+    {
+      "id": 336,
+      "label": "cluster-336",
+      "domain": 4,
+      "theta": 1.033262,
+      "phi": 4.723994,
+      "kappa": 448.401,
+      "size": 391
+    },
+    {
+      "id": 337,
+      "label": "cluster-337",
+      "domain": 6,
+      "theta": 1.935082,
+      "phi": 3.373702,
+      "kappa": 390.952,
+      "size": 397
+    },
+    {
+      "id": 338,
+      "label": "cluster-338",
+      "domain": 6,
+      "theta": 1.882164,
+      "phi": 3.924433,
+      "kappa": 460.225,
+      "size": 568
+    },
+    {
+      "id": 339,
+      "label": "cluster-339",
+      "domain": 10,
+      "theta": 0.14441,
+      "phi": 0.709758,
+      "kappa": 546.862,
+      "size": 630
+    },
+    {
+      "id": 340,
+      "label": "cluster-340",
+      "domain": 2,
+      "theta": 0.794799,
+      "phi": 1.33698,
+      "kappa": 402.555,
+      "size": 441
+    },
+    {
+      "id": 341,
+      "label": "cluster-341",
+      "domain": 2,
+      "theta": 0.432862,
+      "phi": 1.326669,
+      "kappa": 328.415,
+      "size": 344
+    },
+    {
+      "id": 342,
+      "label": "cluster-342",
+      "domain": 1,
+      "theta": 1.682178,
+      "phi": 5.875511,
+      "kappa": 491.867,
+      "size": 506
+    },
+    {
+      "id": 343,
+      "label": "cluster-343",
+      "domain": 6,
+      "theta": 1.736539,
+      "phi": 3.621455,
+      "kappa": 406.39,
+      "size": 472
+    },
+    {
+      "id": 344,
+      "label": "cluster-344",
+      "domain": 6,
+      "theta": 2.245251,
+      "phi": 4.153692,
+      "kappa": 362.978,
+      "size": 418
+    },
+    {
+      "id": 345,
+      "label": "cluster-345",
+      "domain": 6,
+      "theta": 1.719394,
+      "phi": 4.372659,
+      "kappa": 339.864,
+      "size": 456
+    },
+    {
+      "id": 346,
+      "label": "cluster-346",
+      "domain": 6,
+      "theta": 1.733561,
+      "phi": 3.811591,
+      "kappa": 396.263,
+      "size": 476
+    },
+    {
+      "id": 347,
+      "label": "cluster-347",
+      "domain": 3,
+      "theta": 2.073191,
+      "phi": 2.64877,
+      "kappa": 426.118,
+      "size": 473
+    },
+    {
+      "id": 348,
+      "label": "cluster-348",
+      "domain": 5,
+      "theta": 1.286477,
+      "phi": 1.654751,
+      "kappa": 376.441,
+      "size": 415
+    },
+    {
+      "id": 349,
+      "label": "cluster-349",
+      "domain": 10,
+      "theta": 0.460662,
+      "phi": 4.5378,
+      "kappa": 365.825,
+      "size": 365
+    },
+    {
+      "id": 350,
+      "label": "cluster-350",
+      "domain": 7,
+      "theta": 2.511612,
+      "phi": 1.277425,
+      "kappa": 436.477,
+      "size": 492
+    },
+    {
+      "id": 351,
+      "label": "cluster-351",
+      "domain": 7,
+      "theta": 2.407842,
+      "phi": 1.871756,
+      "kappa": 387.386,
+      "size": 478
+    },
+    {
+      "id": 352,
+      "label": "cluster-352",
+      "domain": 3,
+      "theta": 2.956131,
+      "phi": 1.833286,
+      "kappa": 487.033,
+      "size": 565
+    },
+    {
+      "id": 353,
+      "label": "cluster-353",
+      "domain": 10,
+      "theta": 0.970343,
+      "phi": 4.062881,
+      "kappa": 424.209,
+      "size": 469
+    },
+    {
+      "id": 354,
+      "label": "cluster-354",
+      "domain": 2,
+      "theta": 0.937739,
+      "phi": 1.489118,
+      "kappa": 395.006,
+      "size": 445
+    },
+    {
+      "id": 355,
+      "label": "cluster-355",
+      "domain": 7,
+      "theta": 2.067816,
+      "phi": 1.132327,
+      "kappa": 378.48,
+      "size": 430
+    },
+    {
+      "id": 356,
+      "label": "cluster-356",
+      "domain": 5,
+      "theta": 1.611436,
+      "phi": 2.458298,
+      "kappa": 396.602,
+      "size": 495
+    },
+    {
+      "id": 357,
+      "label": "cluster-357",
+      "domain": 0,
+      "theta": 1.099732,
+      "phi": 2.905831,
+      "kappa": 492.785,
+      "size": 564
+    },
+    {
+      "id": 358,
+      "label": "cluster-358",
+      "domain": 5,
+      "theta": 1.315154,
+      "phi": 1.978981,
+      "kappa": 395.507,
+      "size": 498
+    },
+    {
+      "id": 359,
+      "label": "cluster-359",
+      "domain": 9,
+      "theta": 1.126727,
+      "phi": 0.236482,
+      "kappa": 306.321,
+      "size": 346
+    },
+    {
+      "id": 360,
+      "label": "cluster-360",
+      "domain": 8,
+      "theta": 2.450824,
+      "phi": 5.600195,
+      "kappa": 341.542,
+      "size": 330
+    },
+    {
+      "id": 361,
+      "label": "cluster-361",
+      "domain": 9,
+      "theta": 1.151525,
+      "phi": 6.106367,
+      "kappa": 499.613,
+      "size": 680
+    },
+    {
+      "id": 362,
+      "label": "cluster-362",
+      "domain": 1,
+      "theta": 2.12813,
+      "phi": 5.84204,
+      "kappa": 406.568,
+      "size": 410
+    },
+    {
+      "id": 363,
+      "label": "cluster-363",
+      "domain": 1,
+      "theta": 2.03846,
+      "phi": 6.176202,
+      "kappa": 375.043,
+      "size": 616
+    },
+    {
+      "id": 364,
+      "label": "cluster-364",
+      "domain": 0,
+      "theta": 0.83919,
+      "phi": 2.990812,
+      "kappa": 420.068,
+      "size": 441
+    },
+    {
+      "id": 365,
+      "label": "cluster-365",
+      "domain": 1,
+      "theta": 1.698086,
+      "phi": 0.242128,
+      "kappa": 435.472,
+      "size": 475
+    },
+    {
+      "id": 366,
+      "label": "cluster-366",
+      "domain": 8,
+      "theta": 2.339254,
+      "phi": 5.30043,
+      "kappa": 365.112,
+      "size": 502
+    },
+    {
+      "id": 367,
+      "label": "cluster-367",
+      "domain": 11,
+      "theta": 1.337839,
+      "phi": 0.752507,
+      "kappa": 459.355,
+      "size": 590
+    },
+    {
+      "id": 368,
+      "label": "cluster-368",
+      "domain": 10,
+      "theta": 0.28714,
+      "phi": 2.94813,
+      "kappa": 486.535,
+      "size": 548
+    },
+    {
+      "id": 369,
+      "label": "cluster-369",
+      "domain": 2,
+      "theta": 0.849936,
+      "phi": 0.818075,
+      "kappa": 399.898,
+      "size": 453
+    },
+    {
+      "id": 370,
+      "label": "cluster-370",
+      "domain": 6,
+      "theta": 1.927799,
+      "phi": 3.559577,
+      "kappa": 423.087,
+      "size": 441
+    },
+    {
+      "id": 371,
+      "label": "cluster-371",
+      "domain": 0,
+      "theta": 1.161038,
+      "phi": 3.532721,
+      "kappa": 503.7,
+      "size": 529
+    },
+    {
+      "id": 372,
+      "label": "cluster-372",
+      "domain": 3,
+      "theta": 2.764026,
+      "phi": 1.873575,
+      "kappa": 354.286,
+      "size": 510
+    },
+    {
+      "id": 373,
+      "label": "cluster-373",
+      "domain": 10,
+      "theta": 0.108719,
+      "phi": 1.81868,
+      "kappa": 674.385,
+      "size": 654
+    },
+    {
+      "id": 374,
+      "label": "cluster-374",
+      "domain": 2,
+      "theta": 0.523612,
+      "phi": 0.547204,
+      "kappa": 399.942,
+      "size": 423
+    },
+    {
+      "id": 375,
+      "label": "cluster-375",
+      "domain": 8,
+      "theta": 2.192637,
+      "phi": 4.749929,
+      "kappa": 425.432,
+      "size": 337
+    },
+    {
+      "id": 376,
+      "label": "cluster-376",
+      "domain": 4,
+      "theta": 1.754337,
+      "phi": 4.953846,
+      "kappa": 450.886,
+      "size": 711
+    },
+    {
+      "id": 377,
+      "label": "cluster-377",
+      "domain": 8,
+      "theta": 2.40235,
+      "phi": 4.57811,
+      "kappa": 539.176,
+      "size": 549
+    },
+    {
+      "id": 378,
+      "label": "cluster-378",
+      "domain": 0,
+      "theta": 1.794456,
+      "phi": 3.053139,
+      "kappa": 514.409,
+      "size": 476
+    },
+    {
+      "id": 379,
+      "label": "cluster-379",
+      "domain": 2,
+      "theta": 0.527318,
+      "phi": 2.265451,
+      "kappa": 333.436,
+      "size": 490
+    },
+    {
+      "id": 380,
+      "label": "cluster-380",
+      "domain": 10,
+      "theta": 0.819197,
+      "phi": 3.814869,
+      "kappa": 523.091,
+      "size": 594
+    },
+    {
+      "id": 381,
+      "label": "cluster-381",
+      "domain": 10,
+      "theta": 0.280006,
+      "phi": 5.610317,
+      "kappa": 438.092,
+      "size": 546
+    },
+    {
+      "id": 382,
+      "label": "cluster-382",
+      "domain": 1,
+      "theta": 2.018472,
+      "phi": 0.389085,
+      "kappa": 436.952,
+      "size": 615
+    },
+    {
+      "id": 383,
+      "label": "cluster-383",
+      "domain": 5,
+      "theta": 1.547067,
+      "phi": 2.253069,
+      "kappa": 339.788,
+      "size": 370
+    },
+    {
+      "id": 384,
+      "label": "cluster-384",
+      "domain": 5,
+      "theta": 1.891204,
+      "phi": 1.537953,
+      "kappa": 407.151,
+      "size": 507
+    },
+    {
+      "id": 385,
+      "label": "cluster-385",
+      "domain": 3,
+      "theta": 2.208116,
+      "phi": 3.236665,
+      "kappa": 413.169,
+      "size": 591
+    },
+    {
+      "id": 386,
+      "label": "cluster-386",
+      "domain": 9,
+      "theta": 0.599791,
+      "phi": 0.121428,
+      "kappa": 377.44,
+      "size": 466
+    },
+    {
+      "id": 387,
+      "label": "cluster-387",
+      "domain": 3,
+      "theta": 2.409025,
+      "phi": 3.721722,
+      "kappa": 381.523,
+      "size": 427
+    },
+    {
+      "id": 388,
+      "label": "cluster-388",
+      "domain": 8,
+      "theta": 2.174329,
+      "phi": 4.363857,
+      "kappa": 432.241,
+      "size": 345
+    },
+    {
+      "id": 389,
+      "label": "cluster-389",
+      "domain": 4,
+      "theta": 1.147475,
+      "phi": 4.154667,
+      "kappa": 396.263,
+      "size": 485
+    },
+    {
+      "id": 390,
+      "label": "cluster-390",
+      "domain": 9,
+      "theta": 0.950596,
+      "phi": 5.418338,
+      "kappa": 433.607,
+      "size": 499
+    },
+    {
+      "id": 391,
+      "label": "cluster-391",
+      "domain": 0,
+      "theta": 1.089321,
+      "phi": 2.686737,
+      "kappa": 448.297,
+      "size": 539
+    },
+    {
+      "id": 392,
+      "label": "cluster-392",
+      "domain": 3,
+      "theta": 2.850547,
+      "phi": 2.970175,
+      "kappa": 423.953,
+      "size": 479
+    },
+    {
+      "id": 393,
+      "label": "cluster-393",
+      "domain": 0,
+      "theta": 1.530877,
+      "phi": 3.163307,
+      "kappa": 430.92,
+      "size": 555
+    },
+    {
+      "id": 394,
+      "label": "cluster-394",
+      "domain": 11,
+      "theta": 1.512185,
+      "phi": 0.541379,
+      "kappa": 378.178,
+      "size": 429
+    },
+    {
+      "id": 395,
+      "label": "cluster-395",
+      "domain": 0,
+      "theta": 1.323096,
+      "phi": 2.62671,
+      "kappa": 486.384,
+      "size": 543
+    },
+    {
+      "id": 396,
+      "label": "cluster-396",
+      "domain": 4,
+      "theta": 1.224716,
+      "phi": 5.409339,
+      "kappa": 531.22,
+      "size": 555
+    },
+    {
+      "id": 397,
+      "label": "cluster-397",
+      "domain": 5,
+      "theta": 1.781221,
+      "phi": 2.4874,
+      "kappa": 495.577,
+      "size": 598
+    },
+    {
+      "id": 398,
+      "label": "cluster-398",
+      "domain": 6,
+      "theta": 1.635201,
+      "phi": 3.321687,
+      "kappa": 410.962,
+      "size": 453
+    },
+    {
+      "id": 399,
+      "label": "cluster-399",
+      "domain": 10,
+      "theta": 0.253577,
+      "phi": 0.055937,
+      "kappa": 494.926,
+      "size": 570
+    }
+  ]
+}
