@@ -844,6 +844,37 @@ button:focus-visible {
   color: #E2E8F0;
 }
 
+/* Approachability signals — license, last-push recency, onboarding-friendly.
+   flex-wrap rather than a dedicated narrow-width rule: four short chips wrap
+   cleanly on their own at the 320px panel width and at the 860px bottom-sheet
+   width alike, so this doesn't need its own breakpoint. */
+.detail-panel__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #CBD5E1;
+  background: rgba(148, 163, 184, 0.15);
+  white-space: nowrap;
+}
+
+.badge--good {
+  color: #86EFAC;
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.badge--warn {
+  color: #FCA5A5;
+  background: rgba(239, 68, 68, 0.15);
+}
+
 .detail-panel__meta {
   display: flex;
   gap: 16px;
@@ -948,6 +979,29 @@ button:focus-visible {
 .search-box__input:focus {
   width: 280px;
   border-color: var(--cyan);
+}
+
+.search-box__filter {
+  margin-left: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--text-muted, #888);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 150ms, color 150ms;
+}
+
+.search-box__filter:hover {
+  border-color: var(--cyan);
+}
+
+.search-box__filter.is-active {
+  border-color: #86EFAC;
+  color: #86EFAC;
 }
 
 .search-box__results {
@@ -1122,7 +1176,20 @@ button:focus-visible {
   }
   .search-box__input,
   .search-box__input:focus {
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+  /* Full "Beginner friendly" label doesn't fit next to a flexed input on a
+     360px screen — the icon-sized target still does. */
+  .search-box__filter {
+    flex: 0 0 auto;
+    font-size: 0;
+    padding: 8px;
+  }
+  .search-box__filter::before {
+    content: '★';
+    font-size: 14px;
   }
   /* Anchored to the viewport rather than the input, so a 280px dropdown can't
      hang off the right edge of a 375px screen. */

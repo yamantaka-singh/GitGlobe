@@ -3,6 +3,7 @@ import json
 import hashlib
 import math
 import logging
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
@@ -19,7 +20,7 @@ logging.basicConfig(
     format="%(levelname)s:     %(name)s - %(message)s",
 )
 
-from fastapi import FastAPI, Query, HTTPException, Depends, Response
+from fastapi import FastAPI, Query, HTTPException, Depends, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncpg
@@ -35,6 +36,7 @@ from .embed import (
     QueryEmbedder,
     assert_matches_collection,
 )
+from .summarize import MODEL as SUMMARY_MODEL, SummaryGenerator, SummaryUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ class AppState:
     qdrant: AsyncQdrantClient = None
     redis: Redis = None
     embedder: Optional[QueryEmbedder] = None
+    summarizer: Optional[SummaryGenerator] = None
 
 state = AppState()
 
@@ -87,11 +90,25 @@ async def lifespan(app: FastAPI):
         log.error("DENSE SEARCH DISABLED — search is lexical-only. Reason: %s", e)
         await embedder.close()
 
+    # Same key, same optionality as the dense arm: no NVIDIA_API_KEY means no
+    # on-demand summaries, and `get_repo` falls back to the GitHub description
+    # exactly as it already does for a repo the batch teacher never reached.
+    summarizer = SummaryGenerator()
+    try:
+        await summarizer.start()
+        state.summarizer = summarizer
+        log.info("On-demand summaries enabled: %s", SUMMARY_MODEL)
+    except SummaryUnavailable as e:
+        log.info("On-demand summaries disabled: %s", e)
+        await summarizer.close()
+
     yield
 
     # Shutdown
     if state.embedder:
         await state.embedder.close()
+    if state.summarizer:
+        await state.summarizer.close()
     await state.db_pool.close()
     await state.qdrant.close()
     await state.redis.close()
@@ -144,6 +161,15 @@ class RepoMetadata(BaseModel):
     #: "no summary exists" from "the summary is empty", and it drives the
     #: fallback to GitHub's own description. Never a placeholder string.
     summary: Optional[str] = None
+    #: 0-100. The student's prediction (source=1) covers the whole corpus; a
+    #: teacher row (source=0) overrides it where one exists. Never from stars —
+    #: `assert_no_popularity_features` keeps the student blind to them, so this
+    #: is a read of the README and nothing else.
+    onboarding_ease: Optional[float] = None
+    learning_value: Optional[float] = None
+    license: Optional[str] = None
+    pushed_at: Optional[datetime] = None
+    is_archived: bool = False
 
 class SearchResult(BaseModel):
     repo: RepoMetadata
@@ -292,6 +318,53 @@ async def name_search(conn, q: str, limit: int) -> List[Dict[str, Any]]:
     return _as_hits(await conn.fetch(NAME_SQL, term, limit))
 
 
+#: Alive, licensed, not archived, and scored onboarding-friendly. The last one
+#: is why this needed `gitglobe learn` first — `onboarding_ease` didn't exist
+#: on 98% of the corpus before the student ran.
+APPROACHABLE_PREDICATE = """
+    NOT r.is_archived
+    AND r.license IS NOT NULL
+    AND r.pushed_at > now() - interval '2 years'
+    AND COALESCE(t.onboarding_ease, st.onboarding_ease) >= 50
+"""
+
+
+async def filter_approachable(conn, fused: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep only the fused hits that look worth a newcomer's time.
+
+    Runs once, after fusion, against whichever ids any arm returned — not a
+    predicate baked into each arm's own query. The dense arm's Qdrant payload
+    carries no license or activity data (re-embedding 186k vectors to add it
+    is its own multi-hour job, not justified for a filter), so a single
+    Postgres round-trip against the fused ids is the only place all three arms
+    can be filtered the same way.
+
+    ponytail: can return fewer than `limit` results when the filter is strict
+    relative to the query — no backfill from a second round of candidates.
+    Widen the arms' fetch size in `search_repos` if that measurably bites;
+    not worth a second round-trip until it does.
+    """
+    ids = [item["id"] for item in fused]
+    if not ids:
+        return fused
+    rows = await conn.fetch(
+        f"""
+        SELECT r.id
+        FROM repo r
+        LEFT JOIN LATERAL (
+            SELECT onboarding_ease FROM repo_score
+            WHERE repo_id = r.id AND source IN (0, 2)
+            ORDER BY source ASC LIMIT 1
+        ) t ON true
+        LEFT JOIN repo_score st ON st.repo_id = r.id AND st.source = 1
+        WHERE r.id = ANY($1) AND {APPROACHABLE_PREDICATE}
+        """,
+        ids,
+    )
+    keep = {r["id"] for r in rows}
+    return [item for item in fused if item["id"] in keep]
+
+
 #: Dense candidates fetched before re-ranking. Cosine alone is a *relevance*
 #: order, not a *result* order, so the top 10 by cosine are not the 10 to show;
 #: `rerank_by_authority` needs a pool deeper than the page to reorder.
@@ -373,7 +446,12 @@ def reciprocal_rank_fusion(*arms, k=60, weights=None) -> List[Dict[str, Any]]:
 # ----------------- Endpoints -----------------
 
 @app.get("/search", response_model=List[SearchResult])
-async def search_repos(response: Response, q: str = Query(..., min_length=2), limit: int = Query(50, ge=1, le=100)):
+async def search_repos(
+    response: Response,
+    q: str = Query(..., min_length=2),
+    limit: int = Query(50, ge=1, le=100),
+    approachable: bool = Query(False, description="Alive, licensed, not archived, onboarding-friendly"),
+):
     """Hybrid search: Vertex+Qdrant dense, Postgres full-text lexical, fused by RRF.
 
     Which arms actually ran is reported in `X-Search-Path`. That header is the
@@ -382,7 +460,7 @@ async def search_repos(response: Response, q: str = Query(..., min_length=2), li
     produce identical-looking results, and previously the only way to tell them
     apart was to read the server logs.
     """
-    cache_key = f"search:v2:{limit}:{hashlib.sha256(q.encode()).hexdigest()}"
+    cache_key = f"search:v2:{limit}:{approachable}:{hashlib.sha256(q.encode()).hexdigest()}"
     cached = await state.redis.get(cache_key)
     if cached:
         payload = json.loads(cached)
@@ -391,6 +469,11 @@ async def search_repos(response: Response, q: str = Query(..., min_length=2), li
 
     dense_hits: List[Any] = []
     path = []
+
+    # Filtering shrinks the fused list, so ask each arm for more than `limit`
+    # up front when it's active — otherwise a strict filter against a
+    # `limit`-sized pool routinely returns far fewer than `limit` results.
+    fetch_limit = max(limit, DENSE_CANDIDATES) if approachable else limit
 
     if state.embedder:
         try:
@@ -409,7 +492,7 @@ async def search_repos(response: Response, q: str = Query(..., min_length=2), li
                 query_vector=query_vector,
                 limit=max(limit, DENSE_CANDIDATES),
             )
-            dense_hits = rerank_by_authority(candidates)[:limit]
+            dense_hits = rerank_by_authority(candidates)[:fetch_limit]
             path.append("dense")
         except EmbeddingUnavailable as e:
             # Loud on purpose. This used to `print` and continue, so a permanent
@@ -421,8 +504,8 @@ async def search_repos(response: Response, q: str = Query(..., min_length=2), li
             log.exception("Dense arm failed unexpectedly: %s", e)
 
     async with state.db_pool.acquire() as conn:
-        lexical_hits = await lexical_search(conn, q, limit)
-        name_hits = await name_search(conn, q, limit)
+        lexical_hits = await lexical_search(conn, q, fetch_limit)
+        name_hits = await name_search(conn, q, fetch_limit)
     if lexical_hits:
         path.append("lexical")
     if name_hits:
@@ -445,7 +528,11 @@ async def search_repos(response: Response, q: str = Query(..., min_length=2), li
     # precisely the shape lexical is worst at and the eval cannot see.
     fused = reciprocal_rank_fusion(
         dense_hits, name_hits, lexical_hits, k=60, weights=(2.0, 2.0, 1.0)
-    )[:limit]
+    )
+    if approachable and fused:
+        async with state.db_pool.acquire() as conn:
+            fused = await filter_approachable(conn, fused)
+    fused = fused[:limit]
     final_results = [
         SearchResult(
             repo=RepoMetadata(
@@ -492,18 +579,96 @@ async def search_repos(response: Response, q: str = Query(..., min_length=2), li
 #:
 #: `NULLIF` on the trimmed summary keeps the nullable contract honest — an empty
 #: string must read as "no summary", not as a summary that happens to be blank.
+#:
+#: `SOURCE_TEACHER_DISPLAY` (2) covers two callers that never train the student:
+#: the coverage-fill batch job (`gitglobe teach --source-tag 2 ...`, top-star
+#: repos the original stratified sample missed) and `maybe_generate_summary`
+#: below (one repo, on demand, when someone opens it). Sharing one value is
+#: deliberate — nothing downstream needs to tell them apart, only `learn`'s
+#: `source = 0` filter needs them kept out of training, and one shared bucket is
+#: less to get wrong than two.
+#:
+#: `onboarding_ease`/`learning_value` prefer the teacher's read where one
+#: exists and fall back to the student, which is the only one of the two with
+#: 100% coverage — `gitglobe learn` is what makes that COALESCE non-trivial.
 REPO_SELECT = """
     SELECT r.id, r.full_name, r.description, r.language, r.domain, r.stars,
-           CASE WHEN r.low_signal THEN NULL ELSE NULLIF(trim(s.summary), '') END
-               AS summary
+           r.license, r.pushed_at, r.is_archived, r.clean_text, r.low_signal,
+           CASE WHEN r.low_signal THEN NULL ELSE NULLIF(trim(t.summary), '') END
+               AS summary,
+           COALESCE(t.onboarding_ease, st.onboarding_ease) AS onboarding_ease,
+           COALESCE(t.learning_value, st.learning_value) AS learning_value
     FROM repo r
-    LEFT JOIN repo_score s ON s.repo_id = r.id AND s.source = 0
+    -- `source IN (0, 2)` cannot be a plain join condition: repo_score's key is
+    -- (repo_id, source), so a repo with both a source=0 and a source=2 row
+    -- would join twice and silently duplicate the result. LATERAL + LIMIT 1
+    -- picks one, preferring 0 (the careful original sample) over 2 (batch or
+    -- on-demand fill) when both exist.
+    LEFT JOIN LATERAL (
+        SELECT summary, onboarding_ease, learning_value
+        FROM repo_score
+        WHERE repo_id = r.id AND source IN (0, 2)
+        ORDER BY source ASC
+        LIMIT 1
+    ) t ON true
+    LEFT JOIN repo_score st ON st.repo_id = r.id AND st.source = 1
     WHERE {predicate}
 """
 
+#: See the comment on `REPO_SELECT` above.
+SOURCE_TEACHER_DISPLAY = 2
+
+
+async def maybe_generate_summary(row) -> Optional[str]:
+    """One repo, one generation attempt, cached forever after.
+
+    Only reached when `REPO_SELECT` already found no summary. Skips the same
+    repos the display query already refuses to show a summary for — no
+    `clean_text` or `low_signal` — for the same reason: a fluent sentence
+    inferred from a title and a badge row is worse than none, published under
+    a real person's repository name.
+
+    Single-flight per repo via a Redis `NX` lock, not a distributed-lock
+    library — the first concurrent request generates, the rest get nothing
+    *this* time rather than duplicating the NIM call, and the next click finds
+    the cached row. Bounded latency, not retried: a slow or failed call costs
+    this one request, once; add a retry queue only if that measurably isn't
+    enough under real traffic.
+
+    Runs as a FastAPI `BackgroundTasks` job — `get_repo` returns before this
+    finishes, so the connection it was called with will already be back in
+    the pool by the time this runs. Acquires its own.
+    """
+    if not state.summarizer or not row["clean_text"] or row["low_signal"]:
+        return None
+
+    lock_key = f"summarizing:{row['id']}"
+    acquired = await state.redis.set(lock_key, "1", nx=True, ex=60)
+    if not acquired:
+        return None
+
+    try:
+        summary = await state.summarizer.generate(
+            row["full_name"], row["description"], row["license"], row["clean_text"]
+        )
+    except SummaryUnavailable as e:
+        log.info("On-demand summary skipped for %s: %s", row["full_name"], e)
+        return None
+
+    async with state.db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO repo_score (repo_id, source, summary, model)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (repo_id, source) DO NOTHING
+            """,
+            row["id"], SOURCE_TEACHER_DISPLAY, summary, SUMMARY_MODEL,
+        )
+    return summary
+
 
 @app.get("/repo/{repo_id}", response_model=Optional[RepoMetadata])
-async def get_repo(repo_id: int, name: Optional[str] = Query(None)):
+async def get_repo(repo_id: int, background_tasks: BackgroundTasks, name: Optional[str] = Query(None)):
     async with state.db_pool.acquire() as conn:
         row = None
 
@@ -518,7 +683,15 @@ async def get_repo(repo_id: int, name: Optional[str] = Query(None)):
             row = await conn.fetchrow(REPO_SELECT.format(predicate="r.id = $1"), repo_id)
 
         if row:
-            return RepoMetadata(**row)
+            metadata = RepoMetadata(**row)
+            # Fired after the response is sent, not awaited here — the model
+            # reasons before answering regardless of `thinking: false` (see
+            # summarize.py), so this was blocking every first click on an
+            # unsummarized repo for ~12s. The panel polls for it instead
+            # (see web/src/ui/RepoDetailPanel.tsx).
+            if metadata.summary is None:
+                background_tasks.add_task(maybe_generate_summary, row)
+            return metadata
     
     # Final fallback: fetch from GitHub public API (60 req/hr unauthenticated).
     # Cache results in Redis for 24h so repeated clicks don't burn rate limits.
