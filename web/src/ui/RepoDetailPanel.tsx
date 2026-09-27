@@ -38,9 +38,9 @@ export function RepoDetailPanel() {
     queryFn: async () => {
       const params = tileName ? `?name=${encodeURIComponent(tileName)}` : '';
       const res = await fetch(`${API}/repo/${repoId}${params}`).catch((e) => {
-        throw new Error(`Cannot reach ${new URL(API).host} (${e?.message ?? 'network error'})`);
+        throw new Error(`Cannot reach ${new URL(API, window.location.origin).host} (${e?.message ?? 'network error'})`);
       });
-      if (!res.ok) throw new Error(`${new URL(API).host} returned HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`${new URL(API, window.location.origin).host} returned HTTP ${res.status}`);
       return res.json();
     },
     enabled: selectedId >= 0 && repoId > 0,

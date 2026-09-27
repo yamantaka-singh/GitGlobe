@@ -67,10 +67,10 @@ export function SearchBox() {
         `${API}/search?q=${encodeURIComponent(debouncedQuery)}&limit=5${approachableParam}`,
       ).catch(
         (e) => {
-          throw new Error(`Cannot reach ${new URL(API).host} (${e?.message ?? 'network error'})`);
+          throw new Error(`Cannot reach ${new URL(API, window.location.origin).host} (${e?.message ?? 'network error'})`);
         },
       );
-      if (!res.ok) throw new Error(`${new URL(API).host} returned HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`${new URL(API, window.location.origin).host} returned HTTP ${res.status}`);
       const rawData = await res.json();
       const mapped: SearchResult[] = rawData.map((item: any) => {
         const repo = item.repo;
